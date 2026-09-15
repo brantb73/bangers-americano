@@ -1,0 +1,435 @@
+import { createId } from './ids'
+import {
+  activePlayers,
+  bumpSitOuts,
+  currentRoundHasScores,
+  generateNextRound,
+  isPlayerActive,
+  playingSlots,
+  recordPartnerships,
+  unbumpSitOuts,
+  unrecordPartnerships,
+} from './schedule'
+import type { Player, RosterChangeResult, Session, WinBy } from './types'
+
+export const STORAGE_KEY = 'pickleball-americano-session-v1'
+
+export function createEmptySession(): Session {
+  return {
+    id: createId('session'),
+    players: [],
+    courts: 2,
+    pointsToWin: 11,
+    winBy: 2,
+    rounds: [],
+    currentRoundIndex: 0,
+    status: 'setup',
+    scores: {},
+    sitOutCounts: {},
+    partnerCounts: {},
+    scoreLog: [],
+    createdAt: new Date().toISOString(),
+  }
+}
+
+
+/**
+ * Fix a misspelled name. Keeps player id stable so scores/standings stay tied.
+ * Rejects empty names. Works in setup and active sessions (and finished for history edits if needed).
+ */
+export function renamePlayer(
+  session: Session,
+  playerId: string,
+  newName: string,
+): { session: Session; ok: boolean; reason?: string } {
+  const trimmed = newName.trim().slice(0, 24)
+  if (!trimmed) {
+    return { session, ok: false, reason: 'Name cannot be empty' }
+  }
+  const player = session.players.find((p) => p.id === playerId)
+  if (!player) {
+    return { session, ok: false, reason: 'Player not found' }
+  }
+  if (player.name === trimmed) {
+    return { session, ok: true }
+  }
+  return {
+    session: {
+      ...session,
+      players: session.players.map((p) =>
+        p.id === playerId ? { ...p, name: trimmed } : p,
+      ),
+    },
+    ok: true,
+  }
+}
+
+/** Setup-only hard remove (or used before session starts). */
+export function removePlayer(session: Session, playerId: string): Session {
+  if (session.status !== 'setup') return session
+  const { [playerId]: _s, ...scores } = session.scores
+  const { [playerId]: _o, ...sitOutCounts } = session.sitOutCounts
+  void _s
+  void _o
+  return {
+    ...session,
+    players: session.players.filter((p) => p.id !== playerId),
+    scores,
+    sitOutCounts,
+  }
+}
+
+export function setCourts(session: Session, courts: number): Session {
+  if (session.status === 'finished') return session
+  const c = Math.min(4, Math.max(1, Math.floor(courts)))
+  return { ...session, courts: c }
+}
+
+export function setPointsToWin(session: Session, points: number): Session {
+  if (session.status === 'finished') return session
+  const allowed = [9, 11, 15, 21]
+  const p = allowed.includes(points) ? points : Math.min(21, Math.max(5, Math.floor(points)))
+  return { ...session, pointsToWin: p }
+}
+
+export function setWinBy(session: Session, winBy: WinBy): Session {
+  if (session.status === 'finished') return session
+  return { ...session, winBy: winBy === 1 ? 1 : 2 }
+}
+
+export function canStart(session: Session): { ok: boolean; reason?: string } {
+  const n = activePlayers(session).length
+  if (n < 4) {
+    return { ok: false, reason: 'Need at least 4 players' }
+  }
+  if (session.players.length > 16) {
+    return { ok: false, reason: 'Max 16 players' }
+  }
+  if (session.courts < 1 || session.courts > 4) {
+    return { ok: false, reason: 'Courts must be 1–4' }
+  }
+  const slots = playingSlots(n, session.courts)
+  if (slots < 4) {
+    return { ok: false, reason: 'Not enough players for a court' }
+  }
+  return { ok: true }
+}
+
+/** Enough active players to keep generating rounds. */
+export function canContinuePlay(session: Session): { ok: boolean; reason?: string } {
+  const n = activePlayers(session).length
+  if (n < 4) {
+    return { ok: false, reason: 'Need at least 4 active players to continue' }
+  }
+  if (playingSlots(n, session.courts) < 4) {
+    return { ok: false, reason: 'Not enough active players for a court' }
+  }
+  return { ok: true }
+}
+
+/**
+ * Rebuild the current round when it has no scores yet (late add / early leave).
+ * Rolls back sit-out & partnership bumps from the old round, then regenerates.
+ */
+export function regenerateCurrentRound(session: Session): Session {
+  if (session.status !== 'active') return session
+  const idx = session.currentRoundIndex
+  const old = session.rounds[idx]
+  if (!old) return session
+  if (currentRoundHasScores(session)) {
+    throw new Error('Cannot regenerate — scores already entered')
+  }
+
+  const playCheck = canContinuePlay(session)
+  if (!playCheck.ok) throw new Error(playCheck.reason)
+
+  const partnerCounts = unrecordPartnerships(session.partnerCounts, old.matches)
+  const sitOutCounts = unbumpSitOuts(session.sitOutCounts, old.sittingOut)
+  const priorRounds = session.rounds.slice(0, idx)
+  const draft: Session = {
+    ...session,
+    partnerCounts,
+    sitOutCounts,
+    rounds: priorRounds,
+  }
+  const generated = generateNextRound(draft)
+  const round = { ...generated, number: old.number }
+
+  return {
+    ...session,
+    partnerCounts: recordPartnerships(partnerCounts, round.matches),
+    sitOutCounts: bumpSitOuts(sitOutCounts, round.sittingOut),
+    rounds: session.rounds.map((r, i) => (i === idx ? round : r)),
+  }
+}
+
+/**
+ * Add a player during setup or an active session.
+ * Active + unscored current round → regenerate so they can play now.
+ * Active + scored round → join roster for subsequent rounds only.
+ */
+export function addPlayer(session: Session, name: string): RosterChangeResult {
+  const trimmed = name.trim()
+  if (!trimmed) {
+    return { session, ok: false, reason: 'Enter a name' }
+  }
+  if (session.status === 'finished') {
+    return { session, ok: false, reason: 'Session is finished' }
+  }
+  if (session.players.length >= 16) {
+    return { session, ok: false, reason: 'Max 16 players' }
+  }
+
+  const player: Player = {
+    id: createId('player'),
+    name: trimmed,
+    active: true,
+  }
+
+  let next: Session = {
+    ...session,
+    players: [...session.players, player],
+    scores: { ...session.scores, [player.id]: 0 },
+    sitOutCounts: { ...session.sitOutCounts, [player.id]: 0 },
+  }
+
+  if (session.status === 'setup') {
+    return { session: next, ok: true }
+  }
+
+  // Active session
+  if (currentRoundHasScores(next)) {
+    return {
+      session: next,
+      ok: true,
+      regenerated: false,
+      reason: `${trimmed} added — will join next round`,
+    }
+  }
+
+  try {
+    next = regenerateCurrentRound(next)
+    return { session: next, ok: true, regenerated: true }
+  } catch (e) {
+    return {
+      session: next,
+      ok: true,
+      regenerated: false,
+      reason: e instanceof Error ? e.message : 'Added, but could not rebuild round',
+    }
+  }
+}
+
+/**
+ * Mark a player as left during an active session (keeps points on standings).
+ * If current round has any scores → block.
+ * If no scores → mark inactive and regenerate current round.
+ */
+export function leavePlayer(session: Session, playerId: string): RosterChangeResult {
+  if (session.status === 'setup') {
+    return { session: removePlayer(session, playerId), ok: true }
+  }
+  if (session.status !== 'active') {
+    return { session, ok: false, reason: 'Can only remove during play' }
+  }
+
+  const player = session.players.find((p) => p.id === playerId)
+  if (!player) return { session, ok: false, reason: 'Player not found' }
+  if (!isPlayerActive(player)) {
+    return { session, ok: false, reason: 'Already left' }
+  }
+
+  if (currentRoundHasScores(session)) {
+    return {
+      session,
+      ok: false,
+      reason: 'Finish or undo scores in this round before removing a player',
+    }
+  }
+
+  const activeCount = activePlayers(session).length
+  if (activeCount <= 4) {
+    return {
+      session,
+      ok: false,
+      reason: 'Need at least 4 active players — end session or add someone first',
+    }
+  }
+
+  let next: Session = {
+    ...session,
+    players: session.players.map((p) =>
+      p.id === playerId ? { ...p, active: false } : p,
+    ),
+  }
+
+  try {
+    next = regenerateCurrentRound(next)
+    return { session: next, ok: true, regenerated: true }
+  } catch (e) {
+    return {
+      session,
+      ok: false,
+      reason: e instanceof Error ? e.message : 'Could not rebuild round',
+    }
+  }
+}
+
+/** Start session and generate the first round */
+export function startSession(session: Session): Session {
+  const check = canStart(session)
+  if (!check.ok) throw new Error(check.reason)
+
+  const players = session.players.map((p) => ({ ...p, active: p.active !== false }))
+
+  let next: Session = {
+    ...session,
+    players,
+    status: 'active',
+    rounds: [],
+    currentRoundIndex: 0,
+    scoreLog: [],
+    recapScript: undefined,
+    partnerCounts: {},
+    sitOutCounts: Object.fromEntries(players.map((p) => [p.id, 0])),
+    scores: Object.fromEntries(players.map((p) => [p.id, 0])),
+  }
+
+  const round = generateNextRound(next)
+  next = {
+    ...next,
+    rounds: [round],
+    currentRoundIndex: 0,
+    partnerCounts: recordPartnerships({}, round.matches),
+    sitOutCounts: bumpSitOuts(next.sitOutCounts, round.sittingOut),
+  }
+  return next
+}
+
+export function advanceToNextRound(session: Session): Session {
+  if (session.status !== 'active') return session
+  const check = canContinuePlay(session)
+  if (!check.ok) throw new Error(check.reason)
+  const round = generateNextRound(session)
+  return {
+    ...session,
+    rounds: [...session.rounds, round],
+    currentRoundIndex: session.rounds.length,
+    partnerCounts: recordPartnerships(session.partnerCounts, round.matches),
+    sitOutCounts: bumpSitOuts(session.sitOutCounts, round.sittingOut),
+  }
+}
+
+
+export function setMatchComment(
+  session: Session,
+  roundIndex: number,
+  matchId: string,
+  comment: string,
+): Session {
+  const trimmed = comment.trim().slice(0, 280)
+  const rounds = session.rounds.map((r, i) => {
+    if (i !== roundIndex) return r
+    return {
+      ...r,
+      matches: r.matches.map((m) =>
+        m.id === matchId ? { ...m, comment: trimmed || undefined } : m,
+      ),
+    }
+  })
+  return { ...session, rounds }
+}
+
+export function setRoundNote(session: Session, roundIndex: number, note: string): Session {
+  const trimmed = note.trim().slice(0, 200)
+  const rounds = session.rounds.map((r, i) =>
+    i === roundIndex ? { ...r, note: trimmed || undefined } : r,
+  )
+  return { ...session, rounds }
+}
+
+export function setRecapScript(session: Session, script: string): Session {
+  const trimmed = script.trim()
+  return { ...session, recapScript: trimmed || undefined }
+}
+
+export function endSession(session: Session): Session {
+  return { ...session, status: 'finished' }
+}
+
+/** Re-open a finished session so more rounds can be played. */
+export function reopenSession(session: Session): Session {
+  if (session.rounds.length === 0) return session
+  return { ...session, status: 'active' }
+}
+
+export function resetToSetup(session: Session): Session {
+  // Rematch: bring everyone back (including those who left early)
+  return {
+    ...createEmptySession(),
+    players: session.players.map((p) => ({
+      id: p.id,
+      name: p.name,
+      active: true,
+    })),
+    courts: session.courts,
+    pointsToWin: session.pointsToWin,
+    winBy: session.winBy ?? 2,
+  }
+}
+
+export function normalizeSession(parsed: Session): Session {
+  const winBy: WinBy = parsed.winBy === 1 ? 1 : 2
+  const pointsToWin =
+    typeof parsed.pointsToWin === 'number' && parsed.pointsToWin > 0
+      ? parsed.pointsToWin
+      : 11
+  const players = (Array.isArray(parsed.players) ? parsed.players : []).map((p) => ({
+    ...p,
+    active: p.active !== false,
+  }))
+  return {
+    ...parsed,
+    winBy,
+    pointsToWin,
+    players,
+    rounds: Array.isArray(parsed.rounds) ? parsed.rounds : [],
+    scores: parsed.scores ?? {},
+    sitOutCounts: parsed.sitOutCounts ?? {},
+    partnerCounts: parsed.partnerCounts ?? {},
+    scoreLog: Array.isArray(parsed.scoreLog) ? parsed.scoreLog : [],
+    courts: typeof parsed.courts === 'number' ? parsed.courts : 2,
+    currentRoundIndex:
+      typeof parsed.currentRoundIndex === 'number' ? parsed.currentRoundIndex : 0,
+    status: parsed.status === 'active' || parsed.status === 'finished' ? parsed.status : 'setup',
+    recapScript: typeof parsed.recapScript === 'string' ? parsed.recapScript : undefined,
+  }
+}
+
+export function saveSession(session: Session): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+export function loadSession(): Session | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Session
+    if (!parsed?.id || !Array.isArray(parsed.players)) return null
+    return normalizeSession(parsed)
+  } catch {
+    return null
+  }
+}
+
+export function clearSavedSession(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+}
