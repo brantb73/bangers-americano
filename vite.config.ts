@@ -3,6 +3,7 @@ import { defineConfig } from 'vite'
 import { ttsApiPlugin } from './server/ttsPlugin.ts'
 
 export default defineConfig({
+  base: '/bangers-americano/',
   plugins: [react(), ttsApiPlugin()],
   server: {
     host: true,

@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints (usually `http://localhost:5173`).
+Then open the URL Vite prints (usually `http://localhost:5173/bangers-americano/` — the app is built with the GitHub Pages project base path).
 
 ### Test / build
 
@@ -24,28 +24,32 @@ npm run preview   # serve the production build locally (includes /api/tts)
 ### Open on a phone (same Wi‑Fi)
 
 1. Find your laptop’s local IP (e.g. `192.168.1.42`).
-2. On the phone browser go to `http://YOUR_IP:5173` (Vite is configured with `host: true`).
+2. On the phone browser go to `http://YOUR_IP:5173/bangers-americano/` (Vite is configured with `host: true`).
 3. Add to Home Screen if you like — works offline for the loaded session UI once cached by the browser (still no backend).
 
 **Optional tunnel:** if phone and laptop are on different networks, use a tunnel such as [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/) or `npx localtunnel --port 5173` and open the public URL on the phone.
 
 ## GitHub Pages / static hosting
 
-`npm run build` emits a static site in `dist/`. You can host that folder on GitHub Pages, Netlify, Cloudflare Pages, or any static file server.
+Vite is configured with `base: '/bangers-americano/'` for the project site:
+
+**https://brantb73.github.io/bangers-americano/**
+
+`npm run build` emits a static site in `dist/`. On every push to `main`, `.github/workflows/deploy-pages.yml` runs `npm ci`, `npm run build`, uploads `dist`, and deploys with `actions/upload-pages-artifact` + `actions/deploy-pages`.
 
 - **UI works** without a Node process: roster, scoring, standings, history, text recaps, and Web Speech preview.
-- **`POST /api/tts` is not available** on static hosting. Generate/share **.mp3** recaps only when running `npm run dev` or `npm run preview` with the Vite plugin and [edge-tts](#audio-share-real-mp3) set up.
-- **Project Pages** (repo site at `https://<user>.github.io/bangers-americano/`): set Vite’s base path before building, then commit or upload `dist/`:
+- **`POST /api/tts` is not available** on GitHub Pages (or any static host). Generate/share **.mp3** recaps only when running `npm run dev` or `npm run preview` with the Vite plugin and [edge-tts](#audio-share-real-mp3) set up.
 
-  ```ts
-  // vite.config.ts
-  export default defineConfig({
-    base: '/bangers-americano/',
-    // ...
-  })
-  ```
+### Enable Pages after this lands on `main`
 
-  User/org Pages (`https://<user>.github.io/`) can keep the default `base: '/'`. After changing `base`, rebuild so asset URLs match the hosted path.
+1. Open the repo on GitHub: [brantb73/bangers-americano](https://github.com/brantb73/bangers-americano).
+2. Click **Settings**.
+3. In the left sidebar, click **Pages**.
+4. Under **Build and deployment** → **Source**, choose **GitHub Actions** (not “Deploy from a branch”).
+5. Merge this change to `main` (or push to `main` if it is already merged). Watch **Actions** for the **Deploy GitHub Pages** workflow.
+6. When the **deploy** job is green, open **https://brantb73.github.io/bangers-americano/**.
+
+If Pages was enabled after the first `main` workflow already ran, open **Actions** → **Deploy GitHub Pages** → **Run workflow** (workflow_dispatch) to publish without another commit.
 
 ## How a session works
 
