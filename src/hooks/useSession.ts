@@ -57,8 +57,17 @@ export function useSession() {
     session,
     history,
     hydrated,
-    addPlayer: (name: string) => {
-      update((s) => addPlayer(s, name).session)
+    addPlayer: (name: string): string | null => {
+      let err: string | null = null
+      setSession((s) => {
+        const result = addPlayer(s, name)
+        if (!result.ok) {
+          err = result.reason ?? 'Could not add'
+          return s
+        }
+        return result.session
+      })
+      return err
     },
     addPlayerDuringPlay: (name: string): string | null => {
       let msg: string | null = null
