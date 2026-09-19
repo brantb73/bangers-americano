@@ -71,7 +71,7 @@ export interface Session {
    * to the next round if the current one already has scores.
    */
   sitRequests?: SitRequests
-  /** Cumulative points per player id */
+  /** Cumulative point differential per player id (A−B / B−A each match) */
   scores: Record<string, number>
   /** Sit-out counts per player id */
   sitOutCounts: Record<string, number>
@@ -89,13 +89,14 @@ export interface ScoreEntry {
   matchId: string
   scoreA: number
   scoreB: number
-  /** Points added to each player in that match */
+  /** Point differential added to each player in that match */
   deltas: Record<string, number>
 }
 
 export interface Standing {
   playerId: string
   name: string
+  /** Point differential (positive = outscored opponents) */
   points: number
   gamesPlayed: number
   gamesWon: number
@@ -111,6 +112,7 @@ export interface Standing {
 export interface HistoryStandingSnapshot {
   playerId: string
   name: string
+  /** Point differential at archive time */
   points: number
   rank: number
   gamesPlayed: number

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { activePlayers, playerSitState, sitOutHint, suggestedCourts } from '../lib/schedule'
+import { formatDifferential } from '../lib/scoring'
 import { canContinuePlay } from '../lib/session'
 import type { Session } from '../lib/types'
 import { PlayerNameEdit } from './PlayerNameEdit'
@@ -60,7 +61,7 @@ export function RosterPanel({
     <section className="card roster-panel">
       <h2>Players ({active.length} active)</h2>
       <p className="hint">
-        Late arrivals join with 0 points. <strong>Sit</strong> benches someone for this
+        Late arrivals join at 0 differential. <strong>Sit</strong> benches someone for this
         (or the next) round — they stay in the session. Highlighted Sit means they’re
         sat (manual or a system bye); tap again to unsit and sit someone else.
         Tap Edit to fix a misspelled name.
@@ -127,7 +128,12 @@ export function RosterPanel({
               className={sitting || sit.pendingSit ? 'player-sitting player-list-item' : 'player-list-item'}
             >
               <PlayerNameEdit name={p.name} onSave={(next) => onRename(p.id, next)} badge={badge} />
-              <span className="roster-pts">{session.scores[p.id] ?? 0} pts</span>
+              <span
+                className={`roster-pts${(session.scores[p.id] ?? 0) < 0 ? ' neg' : ''}`}
+                title="Point differential"
+              >
+                {formatDifferential(session.scores[p.id] ?? 0)}
+              </span>
               <button
                 type="button"
                 className={`btn btn-sm btn-sit${sit.highlight ? ' sit-active' : ''}`}
@@ -156,7 +162,12 @@ export function RosterPanel({
               onSave={(next) => onRename(p.id, next)}
               badge={<span className="left-badge">left</span>}
             />
-            <span className="roster-pts">{session.scores[p.id] ?? 0} pts</span>
+            <span
+              className={`roster-pts${(session.scores[p.id] ?? 0) < 0 ? ' neg' : ''}`}
+              title="Point differential"
+            >
+              {formatDifferential(session.scores[p.id] ?? 0)}
+            </span>
           </li>
         ))}
       </ul>

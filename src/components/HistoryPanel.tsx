@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { scoringRuleSummary } from '../lib/scoring'
+import { formatDifferential, scoringRuleSummary } from '../lib/scoring'
 import type { SessionHistoryEntry, WinBy } from '../lib/types'
 import { RecapPanel } from './RecapPanel'
 
@@ -63,7 +63,13 @@ export function HistoryPanel({
                 {r.name}
                 {r.left ? <span className="left-badge">left</span> : null}
               </span>
-              <span className="pts">{r.points}</span>
+              <span
+                className={`pts${r.points < 0 ? ' neg' : r.points > 0 ? ' pos' : ''}`}
+                title="Point differential"
+                aria-label={`Differential ${formatDifferential(r.points)}`}
+              >
+                {formatDifferential(r.points)}
+              </span>
               <span className="meta">
                 {r.gamesPlayed}g · {r.gamesWon}w
               </span>
@@ -233,7 +239,7 @@ export function HistoryPanel({
                     </div>
                     {top && (
                       <span className="history-leader">
-                        #{top.rank} {top.name} · {top.points}
+                        #{top.rank} {top.name} · {formatDifferential(top.points)}
                       </span>
                     )}
                   </button>

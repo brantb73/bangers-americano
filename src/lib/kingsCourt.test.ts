@@ -130,7 +130,7 @@ describe('nextCourtGroups / movement', () => {
 })
 
 describe('seedPlayersFromStandings', () => {
-  it('orders active players by wins first, then points', () => {
+  it('orders active players by wins first, then differential', () => {
     let session = americanoSession(8, 2)
     const m0 = session.rounds[0]!.matches[0]!
     const m1 = session.rounds[0]!.matches[1]!
@@ -292,7 +292,7 @@ describe('switchToKingsCourt', () => {
     expect(() => switchToKingsCourt(session)).toThrow(/Finish or undo/i)
   })
 
-  it('continues banking Americano-style points and tracks KC wins separately', () => {
+  it('continues accumulating differential and tracks KC wins separately', () => {
     let session = americanoSession(4, 1)
     const first = session.rounds[0]!.matches[0]!
     session = applyScore(session, 0, first.id, 11, 5)

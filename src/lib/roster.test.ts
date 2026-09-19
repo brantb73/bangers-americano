@@ -27,7 +27,7 @@ function makeActiveSession(n = 8, courts = 2): Session {
 }
 
 describe('addPlayer during active session', () => {
-  it('adds with 0 points and regenerates unscored round', () => {
+  it('adds with 0 differential and regenerates unscored round', () => {
     const session = makeActiveSession(8, 2)
     const beforeIds = new Set(
       session.rounds[0]!.matches.flatMap((m) => [...m.teamA, ...m.teamB]),
@@ -72,7 +72,7 @@ describe('addPlayer during active session', () => {
 })
 
 describe('leavePlayer during active session', () => {
-  it('marks inactive, keeps points, regenerates unscored round', () => {
+  it('marks inactive, keeps differential, regenerates unscored round', () => {
     let session = makeActiveSession(8, 2)
     // Score a previous conceptual state: put points on p0 then clear via... 
     // Instead leave from unscored round after manually giving points
@@ -203,7 +203,7 @@ describe('toggleSit', () => {
 })
 
 describe('renamePlayer', () => {
-  it('updates name and preserves id and points', async () => {
+  it('updates name and preserves id and differential', async () => {
     const { renamePlayer } = await import('./session')
     let session = makeActiveSession(8, 2)
     session = {

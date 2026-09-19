@@ -1,6 +1,6 @@
 # Bangers · Americano
 
-Mobile-first web app for running recreational **doubles Americano** pickleball sessions — rotating partners, individual cumulative points. Session state lives in `localStorage` **per browser/device** (a tunnel URL on your phone won’t see laptop data). Use **Export/Import** on the home screen to move sessions.
+Mobile-first web app for running recreational **doubles Americano** pickleball sessions — rotating partners, individual **point differential**. Session state lives in `localStorage` **per browser/device** (a tunnel URL on your phone won’t see laptop data). Use **Export/Import** on the home screen to move sessions.
 
 Scoring UI is client-only. **Shareable .mp3 recaps** need the Vite app server (see [Audio share](#audio-share-real-mp3)). Static hosts (GitHub Pages, Netlify, S3, etc.) serve the UI without `/api/tts`.
 
@@ -56,10 +56,10 @@ If Pages was enabled after the first `main` workflow already ran, open **Actions
 1. **Add players** (4–16; typical 8–16).
 2. **Settings:** courts (1–4), **game to** (9 / 11 / 15 / 21), and **win by** (1 or **2**, default **2**). Summary shows e.g. “First to 11, win by 2”.
 3. **Start** — generates Round 1 with whist/Americano-style pairings (maximizes unique partners).
-4. **Enter scores** after each court finishes. Validation enforces game-to / win-by by default. **Sudden death — end game now** accepts an early finish (e.g. 5–6) with a clear winner (ties blocked). Each player **banks their team’s points**.
-5. **Players** (mid-session): tap **Players** to add late arrivals (0 pts) or **Sit** someone for this/next round (they stay in the session). A highlighted Sit is a bye — system or manual — tap again to unsit and sit someone else. Unscored current rounds regenerate automatically; if scores are in, sit changes apply next round.
-6. View **live placement** (wins, points, games played). Rank is **wins first, points break ties**. Rank changes flash after scores. Settings stay available mid-session.
-7. Optional **Switch to King’s Court** finish (confirm): Court 1 is King’s. After each game, winners move up one court, losers move down one; Court 1 winners and Court N losers stay. Partners **split** (teammates become opponents). Seed from current standings (wins, then points) or shuffle. Same game-to / win-by / sudden death scoring; team points keep banking and King’s Court wins show on the board. Sit-outs rotate at the bottom courts.
+4. **Enter scores** after each court finishes. Validation enforces game-to / win-by by default. **Sudden death — end game now** accepts an early finish (e.g. 5–6) with a clear winner (ties blocked). Each player gets the **point differential** (win 11–5 → +6; lose 11–5 → −6; sudden death 6–5 → +1).
+5. **Players** (mid-session): tap **Players** to add late arrivals (0 differential) or **Sit** someone for this/next round (they stay in the session). A highlighted Sit is a bye — system or manual — tap again to unsit and sit someone else. Unscored current rounds regenerate automatically; if scores are in, sit changes apply next round.
+6. View **live placement** (wins, differential +/−, games played). Rank is **wins first, differential breaks ties**. Rank changes flash after scores. Settings stay available mid-session.
+7. Optional **Switch to King’s Court** finish (confirm): Court 1 is King’s. After each game, winners move up one court, losers move down one; Court 1 winners and Court N losers stay. Partners **split** (teammates become opponents). Seed from current standings (wins, then differential) or shuffle. Same game-to / win-by / sudden death scoring; differential keeps accumulating and King’s Court wins show on the board. Sit-outs rotate at the bottom courts.
 8. **End session** for a medal-style final placement. The session is **archived to history by date**. **Undo** reverses the last score entry. The recap mentions a King’s Court finish when you used one.
 
 **Continue session** re-opens the exact scoreboard so you can add more rounds. **Rematch** keeps the same roster/settings with fresh scores.
@@ -76,7 +76,7 @@ If Pages was enabled after the first `main` workflow already ran, open **Actions
 
 Ended sessions are listed on the home/setup screen (newest first), labeled by local date/time (e.g. `Sep 13 · 2:30 PM`, with `#2` if multiple that day). Tap a row for final placement, **Continue session**, **Rematch**, or **Delete**.
 
-**Placement / points:** every player earns the points their team scored that game. Leaderboard ranks by **games won**, then total points, then games played / name.
+**Placement / differential:** every player earns their team’s score minus the opponent’s (11–5 → +6 / −6). Leaderboard ranks by **games won**, then point differential, then games played / name. Saved sessions that still have match scores are recomputed to differential when loaded (old “banked points” totals are not kept).
 
 Sit-outs / byes are distributed so players with the fewest sit-outs so far sit next.
 

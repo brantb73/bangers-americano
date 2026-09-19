@@ -68,11 +68,20 @@ export function normalizeHistoryEntry(entry: SessionHistoryEntry): SessionHistor
     playerCount: entry.playerCount || session.players.length,
     courts: entry.courts || session.courts,
     session,
-    standings: Array.isArray(entry.standings) && entry.standings.length > 0
-      ? entry.standings
-      : snapshotStandings(session),
+    // Prefer standings rebuilt from match scores so old banked-points snapshots migrate.
+    standings: sessionHasScoredMatches(session)
+      ? snapshotStandings(session)
+      : Array.isArray(entry.standings) && entry.standings.length > 0
+        ? entry.standings
+        : snapshotStandings(session),
     recapScript: entry.recapScript || session.recapScript,
   }
+}
+
+function sessionHasScoredMatches(session: Session): boolean {
+  return session.rounds.some((r) =>
+    r.matches.some((m) => m.scoreA !== null && m.scoreB !== null),
+  )
 }
 
 export function snapshotStandings(session: Session): HistoryStandingSnapshot[] {

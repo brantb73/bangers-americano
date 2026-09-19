@@ -2,15 +2,18 @@ import { describe, expect, it } from 'vitest'
 import {
   applyScore,
   computeStandings,
+  formatDifferential,
   isRoundComplete,
   isValidFinishedScore,
   isValidSuddenDeathScore,
+  matchPointDifferentials,
+  recomputeScoresFromMatches,
   scoringRuleSummary,
   undoLastScore,
   validateScoreInput,
   validateSuddenDeathScore,
 } from './scoring'
-import { advanceToNextRound, createEmptySession, startSession } from './session'
+import { advanceToNextRound, createEmptySession, normalizeSession, startSession } from './session'
 import type { Player, Session } from './types'
 
 function makeSession(n = 8, courts = 2, winBy: 1 | 2 = 2): Session {
@@ -28,16 +31,31 @@ function makeSession(n = 8, courts = 2, winBy: 1 | 2 = 2): Session {
   })
 }
 
-describe('applyScore / Americano banking', () => {
-  it('adds team points to each player on that team', () => {
+describe('matchPointDifferentials / formatDifferential', () => {
+  it('is 11–5 → +6 / −6', () => {
+    expect(matchPointDifferentials(11, 5)).toEqual({ deltaA: 6, deltaB: -6 })
+    expect(formatDifferential(6)).toBe('+6')
+    expect(formatDifferential(-6)).toBe('-6')
+    expect(formatDifferential(0)).toBe('0')
+  })
+
+  it('is sudden death 6–5 → +1 / −1', () => {
+    expect(matchPointDifferentials(6, 5)).toEqual({ deltaA: 1, deltaB: -1 })
+  })
+})
+
+describe('applyScore / point differential', () => {
+  it('adds 11–5 as +6 / −6 to each player on that team', () => {
     let session = makeSession()
     const match = session.rounds[0]!.matches[0]!
-    session = applyScore(session, 0, match.id, 11, 7)
+    session = applyScore(session, 0, match.id, 11, 5)
 
-    expect(session.scores[match.teamA[0]]).toBe(11)
-    expect(session.scores[match.teamA[1]]).toBe(11)
-    expect(session.scores[match.teamB[0]]).toBe(7)
-    expect(session.scores[match.teamB[1]]).toBe(7)
+    expect(session.scores[match.teamA[0]]).toBe(6)
+    expect(session.scores[match.teamA[1]]).toBe(6)
+    expect(session.scores[match.teamB[0]]).toBe(-6)
+    expect(session.scores[match.teamB[1]]).toBe(-6)
+    expect(session.scoreLog[0]!.deltas[match.teamA[0]]).toBe(6)
+    expect(session.scoreLog[0]!.deltas[match.teamB[0]]).toBe(-6)
   })
 
   it('rejects re-scoring without undo', () => {
@@ -49,7 +67,7 @@ describe('applyScore / Americano banking', () => {
 })
 
 describe('undoLastScore', () => {
-  it('restores points and clears match scores', () => {
+  it('restores differentials and clears match scores', () => {
     let session = makeSession()
     const m0 = session.rounds[0]!.matches[0]!
     const m1 = session.rounds[0]!.matches[1]!
@@ -60,7 +78,7 @@ describe('undoLastScore', () => {
     expect(session.rounds[0]!.matches[1]!.scoreA).toBeNull()
     expect(session.rounds[0]!.matches[1]!.scoreB).toBeNull()
     expect(session.scores[m1.teamA[0]]).toBe(0)
-    expect(session.scores[m0.teamA[0]]).toBe(11)
+    expect(session.scores[m0.teamA[0]]).toBe(7)
   })
 
   it('is a no-op when log is empty', () => {
@@ -124,42 +142,60 @@ describe('sudden death validation', () => {
     expect(validateSuddenDeathScore(1.5, 2)).toBe('Enter whole numbers')
   })
 
-  it('banks points and credits a win on early finish via applyScore', () => {
+  it('applies sudden death 6–5 as +1 / −1 and credits a win', () => {
     let session = makeSession(4, 1)
     const match = session.rounds[0]!.matches[0]!
-    session = applyScore(session, 0, match.id, 5, 6)
+    session = applyScore(session, 0, match.id, 6, 5)
 
-    expect(session.scores[match.teamA[0]]).toBe(5)
-    expect(session.scores[match.teamB[0]]).toBe(6)
+    expect(session.scores[match.teamA[0]]).toBe(1)
+    expect(session.scores[match.teamB[0]]).toBe(-1)
 
     const standings = computeStandings(session)
-    const winners = standings.filter((s) => match.teamB.includes(s.playerId))
-    const losers = standings.filter((s) => match.teamA.includes(s.playerId))
+    const winners = standings.filter((s) => match.teamA.includes(s.playerId))
+    const losers = standings.filter((s) => match.teamB.includes(s.playerId))
     expect(winners.every((s) => s.gamesWon === 1)).toBe(true)
     expect(losers.every((s) => s.gamesWon === 0)).toBe(true)
-    // Wins-first: 6-point winners rank above 5-point losers
     expect(standings[0]!.gamesWon).toBe(1)
-    expect(standings[0]!.points).toBe(6)
+    expect(standings[0]!.points).toBe(1)
+    expect(losers.every((s) => s.points === -1)).toBe(true)
   })
 })
 
 describe('standings', () => {
-  it('ranks by games won first, then points', () => {
+  it('ranks by games won first, then point differential', () => {
     let session = makeSession()
     const m0 = session.rounds[0]!.matches[0]!
     const m1 = session.rounds[0]!.matches[1]!
-    session = applyScore(session, 0, m0.id, 11, 3)
-    session = applyScore(session, 0, m1.id, 8, 11)
+    session = applyScore(session, 0, m0.id, 11, 5)
+    session = applyScore(session, 0, m1.id, 11, 5)
 
     const standings = computeStandings(session)
-    // Four players with 1 win + 11 pts share the top under wins-first
-    const top = standings.filter((s) => s.gamesWon === 1 && s.points === 11)
+    const top = standings.filter((s) => s.gamesWon === 1 && s.points === 6)
     expect(top).toHaveLength(4)
     top.forEach((s) => expect(s.rank).toBe(1))
     expect(standings[0]!.gamesWon).toBe(1)
+    const bottom = standings.filter((s) => s.gamesWon === 0 && s.points === -6)
+    expect(bottom).toHaveLength(4)
+    expect(bottom[0]!.rank).toBeGreaterThan(1)
   })
 
-  it('player with more wins ranks above someone with more points but fewer wins', () => {
+  it('breaks a wins tie with a better differential', () => {
+    let session = makeSession()
+    const m0 = session.rounds[0]!.matches[0]!
+    const m1 = session.rounds[0]!.matches[1]!
+    session = applyScore(session, 0, m0.id, 11, 3) // +8
+    session = applyScore(session, 0, m1.id, 11, 9) // +2
+
+    const standings = computeStandings(session)
+    const blowoutWinners = standings.filter((s) => m0.teamA.includes(s.playerId))
+    const closeWinners = standings.filter((s) => m1.teamA.includes(s.playerId))
+    expect(blowoutWinners.every((s) => s.gamesWon === 1 && s.points === 8)).toBe(true)
+    expect(closeWinners.every((s) => s.gamesWon === 1 && s.points === 2)).toBe(true)
+    expect(blowoutWinners[0]!.rank).toBe(1)
+    expect(closeWinners[0]!.rank).toBeGreaterThan(blowoutWinners[0]!.rank)
+  })
+
+  it('player with more wins ranks above someone with more differential but fewer wins', () => {
     let session = makeSession(4, 1)
     const r0 = session.rounds[0]!.matches[0]!
     session = applyScore(session, 0, r0.id, 6, 5)
@@ -179,7 +215,7 @@ describe('standings', () => {
     const fewerWins = standings.find((s) => s.gamesWon < maxWins)
     expect(fewerWins).toBeTruthy()
 
-    // Inflate points on the fewer-wins player — they should still rank below
+    // Inflate differential on the fewer-wins player — they should still rank below
     session = {
       ...session,
       scores: {
@@ -211,5 +247,46 @@ describe('standings', () => {
       session = applyScore(session, 0, m.id, 11, 6)
     }
     expect(isRoundComplete(session, 0)).toBe(true)
+  })
+})
+
+describe('recomputeScoresFromMatches / old session migration', () => {
+  it('rewrites banked team totals to differentials from stored match scores', () => {
+    let session = makeSession(4, 1)
+    const match = session.rounds[0]!.matches[0]!
+    const oldDeltas = {
+      [match.teamA[0]]: 11,
+      [match.teamA[1]]: 11,
+      [match.teamB[0]]: 5,
+      [match.teamB[1]]: 5,
+    }
+    session = {
+      ...session,
+      rounds: session.rounds.map((r, i) =>
+        i === 0
+          ? {
+              ...r,
+              matches: r.matches.map((m) =>
+                m.id === match.id ? { ...m, scoreA: 11, scoreB: 5 } : m,
+              ),
+            }
+          : r,
+      ),
+      scores: { ...oldDeltas },
+      scoreLog: [
+        { roundIndex: 0, matchId: match.id, scoreA: 11, scoreB: 5, deltas: { ...oldDeltas } },
+      ],
+    }
+
+    const migrated = recomputeScoresFromMatches(session)
+    expect(migrated.scores[match.teamA[0]]).toBe(6)
+    expect(migrated.scores[match.teamA[1]]).toBe(6)
+    expect(migrated.scores[match.teamB[0]]).toBe(-6)
+    expect(migrated.scores[match.teamB[1]]).toBe(-6)
+    expect(migrated.scoreLog[0]!.deltas[match.teamA[0]]).toBe(6)
+    expect(migrated.scoreLog[0]!.deltas[match.teamB[0]]).toBe(-6)
+
+    const viaLoad = normalizeSession(JSON.parse(JSON.stringify(session)))
+    expect(viaLoad.scores).toEqual(migrated.scores)
   })
 })

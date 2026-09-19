@@ -255,8 +255,8 @@ export function PlayScreen({
           <h2>King’s Court finish</h2>
           <p className="hint">
             Optional endgame: Court 1 is King’s. Winners move up, losers move down,
-            partners split. Points keep banking; King’s Court wins show on the
-            board. Final rank is still wins first, then points.
+            partners split. Differential keeps accumulating; King’s Court wins show
+            on the board. Final rank is still wins first, then differential.
           </p>
           {!switchCheck.ok && (
             <p className="warn" role="status">
@@ -284,7 +284,7 @@ export function PlayScreen({
               </div>
               <p className="hint">
                 {kcSeed === 'standings'
-                  ? 'Top Americano standings (wins, then points) start toward Court 1.'
+                  ? 'Top Americano standings (wins, then differential) start toward Court 1.'
                   : 'Shuffle the ladder, then play King’s Court rules.'}
               </p>
               <button
