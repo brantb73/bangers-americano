@@ -227,4 +227,40 @@ describe('renamePlayer', () => {
     expect(result.reason).toMatch(/empty/i)
     expect(result.session.players.find((p) => p.id === 'p0')!.name).toBe('P1')
   })
+
+  it('rejects a rename that collides with another player (case-insensitive)', async () => {
+    const { renamePlayer } = await import('./session')
+    const session = makeActiveSession(4, 1)
+    const clash = renamePlayer(session, 'p0', '  p2  ')
+    expect(clash.ok).toBe(false)
+    expect(clash.reason).toBe('That name is already in the list.')
+    expect(clash.session.players.find((p) => p.id === 'p0')!.name).toBe('P1')
+  })
+
+  it('allows a player to keep their own name with different spacing/case only if unique', async () => {
+    const { renamePlayer } = await import('./session')
+    const session = makeActiveSession(4, 1)
+    const same = renamePlayer(session, 'p0', 'P1')
+    expect(same.ok).toBe(true)
+    expect(same.session.players.find((p) => p.id === 'p0')!.name).toBe('P1')
+  })
+})
+
+describe('duplicate names', () => {
+  it('rejects adding a name already on the roster (case-insensitive)', () => {
+    const session = makeActiveSession(4, 1)
+    const result = addPlayer(session, '  p1  ')
+    expect(result.ok).toBe(false)
+    expect(result.reason).toBe('That name is already in the list.')
+    expect(result.session.players).toHaveLength(4)
+  })
+
+  it('rejects adding the same name with different case during setup', () => {
+    let session = createEmptySession()
+    session = addPlayer(session, 'Ava').session
+    const dup = addPlayer(session, 'AVA')
+    expect(dup.ok).toBe(false)
+    expect(dup.reason).toBe('That name is already in the list.')
+    expect(dup.session.players).toHaveLength(1)
+  })
 })

@@ -42,6 +42,19 @@ export function createEmptySession(): Session {
 }
 
 
+/** Case-insensitive name clash (trim). `exceptPlayerId` is the player keeping their own name. */
+export function isDuplicateName(
+  session: Session,
+  name: string,
+  exceptPlayerId?: string,
+): boolean {
+  const key = name.trim().toLowerCase()
+  if (!key) return false
+  return session.players.some(
+    (p) => p.id !== exceptPlayerId && p.name.trim().toLowerCase() === key,
+  )
+}
+
 /**
  * Fix a misspelled name. Keeps player id stable so scores/standings stay tied.
  * Rejects empty names. Works in setup and active sessions (and finished for history edits if needed).
@@ -61,6 +74,9 @@ export function renamePlayer(
   }
   if (player.name === trimmed) {
     return { session, ok: true }
+  }
+  if (isDuplicateName(session, trimmed, playerId)) {
+    return { session, ok: false, reason: 'That name is already in the list.' }
   }
   return {
     session: {
@@ -187,6 +203,9 @@ export function addPlayer(session: Session, name: string): RosterChangeResult {
   }
   if (session.players.length >= 16) {
     return { session, ok: false, reason: 'Max 16 players' }
+  }
+  if (isDuplicateName(session, trimmed)) {
+    return { session, ok: false, reason: 'That name is already in the list.' }
   }
 
   const player: Player = {
