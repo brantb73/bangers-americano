@@ -25,7 +25,7 @@ interface Props {
   onSetPointsToWin: (n: number) => void
   onSetWinBy: (n: WinBy) => void
   onAddPlayer: (name: string) => string | null
-  onLeavePlayer: (id: string) => string | null
+  onToggleSit: (id: string) => string | null
   onSaveComment: (roundIndex: number, matchId: string, comment: string) => void
   onSaveRoundNote: (roundIndex: number, note: string) => void
   onRenamePlayer: (id: string, name: string) => string | null
@@ -41,7 +41,7 @@ export function PlayScreen({
   onSetPointsToWin,
   onSetWinBy,
   onAddPlayer,
-  onLeavePlayer,
+  onToggleSit,
   onSaveComment,
   onSaveRoundNote,
   onRenamePlayer,
@@ -125,7 +125,7 @@ export function PlayScreen({
           session={session}
           sittingOutIds={round.sittingOut}
           onAdd={onAddPlayer}
-          onLeave={onLeavePlayer}
+          onToggleSit={onToggleSit}
           onRename={onRenamePlayer}
         />
       )}

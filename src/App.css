@@ -942,6 +942,19 @@
   text-align: center;
 }
 
+.btn-sit {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--muted);
+  min-width: 56px;
+}
+
+.btn-sit.sit-active {
+  background: var(--warn);
+  border-color: var(--warn);
+  color: #1a1400;
+}
+
 /* —— King’s Court —— */
 .kc-switch-card {
   border-color: var(--warn);

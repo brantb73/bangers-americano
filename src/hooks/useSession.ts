@@ -31,6 +31,7 @@ import {
   setWinBy,
   startSession,
   switchToKingsCourt,
+  toggleSit,
 } from '../lib/session'
 import type { KingsCourtSeed, Session, SessionHistoryEntry, WinBy } from '../lib/types'
 
@@ -99,6 +100,25 @@ export function useSession() {
         }
         const name = s.players.find((p) => p.id === id)?.name ?? 'Player'
         msg = result.regenerated ? `${name} left — round updated` : `${name} left`
+        return result.session
+      })
+      return msg
+    },
+    toggleSitDuringPlay: (id: string): string | null => {
+      let msg: string | null = null
+      setSession((s) => {
+        const result = toggleSit(s, id)
+        if (!result.ok) {
+          msg = `ERR:${result.reason ?? 'Could not sit'}`
+          return s
+        }
+        const name = s.players.find((p) => p.id === id)?.name ?? 'Player'
+        if (result.regenerated) {
+          const sitting = result.session.rounds[result.session.currentRoundIndex]?.sittingOut.includes(id)
+          msg = sitting ? `${name} sitting — round updated` : `${name} playing — round updated`
+        } else {
+          msg = result.reason ?? `${name} updated`
+        }
         return result.session
       })
       return msg

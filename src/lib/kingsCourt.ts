@@ -1,5 +1,5 @@
 import { createId } from './ids'
-import { activePlayers, pickSitOutsFrom } from './schedule'
+import { activePlayers, chooseSitOuts, pickSitOutsFrom } from './schedule'
 import { computeStandings, isMatchComplete, playerName } from './scoring'
 import type {
   KingsCourtSeed,
@@ -257,6 +257,34 @@ function sortBenchForEntry(ids: string[], session: Session): string[] {
   })
 }
 
+function pickSitsHonoringRequests(
+  poolPlayers: Player[],
+  needed: number,
+  sitOutCounts: Record<string, number>,
+  reqSit: Set<string>,
+  reqPlay: Set<string>,
+): string[] {
+  if (needed <= 0) return []
+  const forced = poolPlayers.filter((p) => reqSit.has(p.id)).map((p) => p.id)
+  if (forced.length >= needed) return forced.slice(0, needed)
+  const rest = pickSitOutsFrom(
+    poolPlayers.filter((p) => !reqSit.has(p.id) && !reqPlay.has(p.id)),
+    needed - forced.length,
+    sitOutCounts,
+  )
+  const sitting = [...forced, ...rest]
+  if (sitting.length < needed) {
+    sitting.push(
+      ...pickSitOutsFrom(
+        poolPlayers.filter((p) => !sitting.includes(p.id)),
+        needed - sitting.length,
+        sitOutCounts,
+      ),
+    )
+  }
+  return sitting
+}
+
 function lastCompletedKingsCourtRound(session: Session): Round | null {
   for (let i = session.rounds.length - 1; i >= 0; i--) {
     const round = session.rounds[i]!
@@ -273,24 +301,37 @@ function generateFromSeed(session: Session, rng: () => number): Round {
   const active = activePlayers(session)
   const ordered =
     seed === 'random' ? shufflePlayers(active, rng) : seedPlayersFromStandings(session)
-  const courts = targetCourtCount(session)
-  const slots = courts * 4
-  if (ordered.length < slots) {
+  const hasSitRequests =
+    (session.sitRequests?.sit.length ?? 0) > 0 || (session.sitRequests?.play.length ?? 0) > 0
+  const sittingOut = hasSitRequests
+    ? chooseSitOuts(active, session.courts, session.sitOutCounts, session.sitRequests)
+    : null
+  const sitSet = new Set(sittingOut ?? [])
+  const playing = sittingOut
+    ? ordered.filter((p) => !sitSet.has(p.id))
+    : ordered
+  const courts = sittingOut
+    ? Math.min(session.courts, Math.floor(playing.length / 4))
+    : targetCourtCount(session)
+  if (courts < 1) {
     throw new Error('Not enough active players for a court')
   }
-
-  const playing = ordered.slice(0, slots)
-  const sittingOut = ordered.slice(slots).map((p) => p.id)
+  const slots = courts * 4
+  if (playing.length < slots) {
+    throw new Error('Not enough active players for a court')
+  }
+  const onCourt = playing.slice(0, slots)
+  const resolvedSitting = sittingOut ?? playing.slice(slots).map((p) => p.id)
   const matches: Match[] = []
   for (let c = 0; c < courts; c++) {
-    const four = playing.slice(c * 4, c * 4 + 4).map((p) => p.id)
+    const four = onCourt.slice(c * 4, c * 4 + 4).map((p) => p.id)
     matches.push(makeMatch(c + 1, seedCourtPairing(four)))
   }
 
   return {
     number: session.rounds.length + 1,
     matches,
-    sittingOut,
+    sittingOut: resolvedSitting,
     kind: 'kingsCourt',
   }
 }
@@ -320,11 +361,31 @@ function generateFromMovement(session: Session, prev: Round): Round {
     ladder.push({ court: ladder.length + 1, groupA: [], groupB: [] })
   }
 
+  const reqSit = new Set(session.sitRequests?.sit ?? [])
+  const reqPlay = new Set(
+    (session.sitRequests?.play ?? []).filter((id) => !reqSit.has(id)),
+  )
+
+  // Manager sit: pull them off the ladder onto the bench.
+  for (const c of ladder) {
+    const take = (arr: string[]) => {
+      const stay = arr.filter((id) => !reqSit.has(id))
+      bench.push(...arr.filter((id) => reqSit.has(id)))
+      return stay
+    }
+    c.groupA = take(c.groupA)
+    c.groupB = take(c.groupB)
+  }
+
   bench = sortBenchForEntry(bench, session)
+  // Forced sits stay on the bench; don't fill upper courts with them.
+  const fillBench = bench.filter((id) => !reqSit.has(id))
+  bench = [...fillBench, ...bench.filter((id) => reqSit.has(id))]
 
   const takeFromBench = (dest: Loose) => {
-    const id = bench.shift()
-    if (!id) return false
+    const idx = bench.findIndex((id) => !reqSit.has(id))
+    if (idx < 0) return false
+    const id = bench.splice(idx, 1)[0]!
     if (dest.groupA.length < 2) dest.groupA.push(id)
     else dest.groupB.push(id)
     return true
@@ -349,7 +410,13 @@ function generateFromMovement(session: Session, prev: Round): Round {
     const poolPlayers = poolIds
       .map((id) => players.find((p) => p.id === id))
       .filter((p): p is Player => Boolean(p))
-    sittingOut = pickSitOutsFrom(poolPlayers, neededSits, session.sitOutCounts)
+    sittingOut = pickSitsHonoringRequests(
+      poolPlayers,
+      neededSits,
+      session.sitOutCounts,
+      reqSit,
+      reqPlay,
+    )
     const sitSet = new Set(sittingOut)
     const filling = poolIds.filter((id) => !sitSet.has(id))
     const four = [...protectedIds, ...filling]
@@ -364,7 +431,13 @@ function generateFromMovement(session: Session, prev: Round): Round {
     const poolPlayers = poolIds
       .map((id) => players.find((p) => p.id === id))
       .filter((p): p is Player => Boolean(p))
-    sittingOut = pickSitOutsFrom(poolPlayers, neededSits, session.sitOutCounts)
+    sittingOut = pickSitsHonoringRequests(
+      poolPlayers,
+      neededSits,
+      session.sitOutCounts,
+      reqSit,
+      reqPlay,
+    )
     const sitSet = new Set(sittingOut)
     const four = poolIds.filter((id) => !sitSet.has(id))
     if (four.length !== 4) {

@@ -1,5 +1,17 @@
 import { createId, pairKey } from './ids'
-import type { Match, Player, Round, Session } from './types'
+import type { Match, Player, Round, Session, SitRequests } from './types'
+
+export function emptySitRequests(): SitRequests {
+  return { sit: [], play: [] }
+}
+
+export function normalizeSitRequests(raw: SitRequests | undefined): SitRequests {
+  const sit = Array.isArray(raw?.sit) ? [...new Set(raw.sit.filter((id) => typeof id === 'string'))] : []
+  const play = Array.isArray(raw?.play)
+    ? [...new Set(raw.play.filter((id) => typeof id === 'string' && !sit.includes(id)))]
+    : []
+  return { sit, play }
+}
 
 export function isPlayerActive(player: Player): boolean {
   return player.active !== false
@@ -51,18 +63,91 @@ export function pickSitOutsFrom(
  * Choose who sits out this round: prefer players with fewest sit-outs so far.
  * Tie-break by id for stability.
  */
+/**
+ * Choose sit-outs, honoring manager sit/play requests.
+ * Forced sits come first; remaining byes go to fewest sits (skipping `play`).
+ * Extra forced sits drop a court when needed so the on-court count stays a multiple of 4.
+ */
 export function chooseSitOuts(
   players: Player[],
   courts: number,
   sitOutCounts: Record<string, number>,
+  requests?: SitRequests | null,
 ): string[] {
-  return pickSitOutsFrom(players, sitOutCount(players.length, courts), sitOutCounts)
+  const idSet = new Set(players.map((p) => p.id))
+  const forceSit = [...new Set((requests?.sit ?? []).filter((id) => idSet.has(id)))]
+  const forcePlay = new Set(
+    (requests?.play ?? []).filter((id) => idSet.has(id) && !forceSit.includes(id)),
+  )
+
+  const sitting = [...forceSit]
+  const available = players.length - sitting.length
+  const playing = Math.min(courts * 4, Math.floor(available / 4) * 4)
+  if (playing < 4) {
+    return pickSitOutsFrom(
+      players.filter((p) => !forcePlay.has(p.id)),
+      sitOutCount(players.length, courts),
+      sitOutCounts,
+    )
+  }
+
+  const targetSit = players.length - playing
+  const more = Math.max(0, targetSit - sitting.length)
+  const candidates = players.filter((p) => !sitting.includes(p.id) && !forcePlay.has(p.id))
+  sitting.push(...pickSitOutsFrom(candidates, more, sitOutCounts))
+  if (sitting.length < targetSit) {
+    const fallback = players.filter((p) => !sitting.includes(p.id))
+    sitting.push(...pickSitOutsFrom(fallback, targetSit - sitting.length, sitOutCounts))
+  }
+  return sitting
+}
+
+/** True if sitting these extra people still leaves a full court. */
+export function canFieldCourtAfterSits(
+  playerCount: number,
+  courts: number,
+  sitIds: string[],
+): boolean {
+  const available = playerCount - new Set(sitIds).size
+  return Math.min(courts * 4, Math.floor(available / 4) * 4) >= 4
 }
 
 type Pair = [string, string]
 
-function partnerCost(a: string, b: string, partnerCounts: Record<string, number>): number {
-  return partnerCounts[pairKey(a, b)] ?? 0
+export function partnerKeysFromMatches(matches: Match[]): Set<string> {
+  const keys = new Set<string>()
+  for (const m of matches) {
+    keys.add(pairKey(m.teamA[0], m.teamA[1]))
+    keys.add(pairKey(m.teamB[0], m.teamB[1]))
+  }
+  return keys
+}
+
+/** Most recent rounds first (index 0 = last played / last generated). */
+export function recentPartnerSets(session: Session, depth = 3): Set<string>[] {
+  const sets: Set<string>[] = []
+  for (let i = session.rounds.length - 1; i >= 0 && sets.length < depth; i--) {
+    sets.push(partnerKeysFromMatches(session.rounds[i]!.matches))
+  }
+  return sets
+}
+
+/**
+ * Partner cost: lifetime repeats, with a heavy penalty for last-round partners
+ * and a decaying penalty for other recent partners.
+ */
+export function pairCost(
+  a: string,
+  b: string,
+  partnerCounts: Record<string, number>,
+  recent: Set<string>[] = [],
+): number {
+  const key = pairKey(a, b)
+  let cost = (partnerCounts[key] ?? 0) * 10
+  if (recent[0]?.has(key)) cost += 1000
+  if (recent[1]?.has(key)) cost += 250
+  if (recent[2]?.has(key)) cost += 80
+  return cost
 }
 
 /**
@@ -72,6 +157,7 @@ function partnerCost(a: string, b: string, partnerCounts: Record<string, number>
 export function buildTeams(
   playerIds: string[],
   partnerCounts: Record<string, number>,
+  recent: Set<string>[] = [],
 ): Pair[] {
   if (playerIds.length % 2 !== 0) {
     throw new Error('buildTeams requires an even number of players')
@@ -87,7 +173,7 @@ export function buildTeams(
 
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
-        const cost = partnerCost(ids[i]!, ids[j]!, partnerCounts)
+        const cost = pairCost(ids[i]!, ids[j]!, partnerCounts, recent)
         if (
           cost < bestCost ||
           (cost === bestCost &&
@@ -107,6 +193,81 @@ export function buildTeams(
   }
 
   return teams
+}
+
+/** All perfect matchings (partner pairings). Feasible for ≤12 players. */
+export function enumeratePerfectMatchings(ids: string[]): Pair[][] {
+  if (ids.length === 0) return [[]]
+  if (ids.length % 2 !== 0) {
+    throw new Error('enumeratePerfectMatchings requires an even number of players')
+  }
+  const first = ids[0]!
+  const rest = ids.slice(1)
+  const out: Pair[][] = []
+  for (let i = 0; i < rest.length; i++) {
+    const partner = rest[i]!
+    const remaining = rest.filter((_, j) => j !== i)
+    for (const tail of enumeratePerfectMatchings(remaining)) {
+      out.push([[first, partner], ...tail])
+    }
+  }
+  return out
+}
+
+function matchingSortKey(teams: Pair[]): string {
+  return teams
+    .map(([a, b]) => pairKey(a, b))
+    .sort()
+    .join(';')
+}
+
+/**
+ * Best partner matching: enumerate when the pool is small so last-round
+ * rematches are avoided whenever any alternative exists.
+ */
+export function bestPartnerMatching(
+  playerIds: string[],
+  partnerCounts: Record<string, number>,
+  recent: Set<string>[] = [],
+): Pair[] {
+  if (playerIds.length % 2 !== 0) {
+    throw new Error('bestPartnerMatching requires an even number of players')
+  }
+  if (playerIds.length === 0) return []
+
+  if (playerIds.length <= 12) {
+    let best: Pair[] | null = null
+    let bestCost = Infinity
+    let bestKey = ''
+    for (const matching of enumeratePerfectMatchings(playerIds)) {
+      const cost = totalPartnerCost(matching, partnerCounts, recent)
+      const key = matchingSortKey(matching)
+      if (cost < bestCost || (cost === bestCost && key < bestKey)) {
+        bestCost = cost
+        bestKey = key
+        best = matching
+      }
+    }
+    return best ?? []
+  }
+
+  let bestTeams = buildTeams(playerIds, partnerCounts, recent)
+  let bestCost = totalPartnerCost(bestTeams, partnerCounts, recent)
+  for (let shift = 1; shift < playerIds.length; shift++) {
+    const rotated = [...playerIds.slice(shift), ...playerIds.slice(0, shift)]
+    const teams = buildTeams(rotated, partnerCounts, recent)
+    const cost = totalPartnerCost(teams, partnerCounts, recent)
+    if (cost < bestCost) {
+      bestCost = cost
+      bestTeams = teams
+    }
+  }
+  const reversed = [...playerIds].reverse()
+  const revTeams = buildTeams(reversed, partnerCounts, recent)
+  if (totalPartnerCost(revTeams, partnerCounts, recent) < bestCost) {
+    bestTeams = revTeams
+  }
+  return bestTeams
 }
 
 /**
@@ -142,7 +303,7 @@ export function generateNextRound(session: Session): Round {
     throw new Error('Not enough active players for a court')
   }
 
-  const sittingOut = chooseSitOuts(players, courts, sitOutCounts)
+  const sittingOut = chooseSitOuts(players, courts, sitOutCounts, session.sitRequests)
   const sittingSet = new Set(sittingOut)
   const active = players.filter((p) => !sittingSet.has(p.id)).map((p) => p.id)
 
@@ -150,26 +311,8 @@ export function generateNextRound(session: Session): Round {
     throw new Error(`Invalid active player count: ${active.length}`)
   }
 
-  let bestTeams = buildTeams(active, partnerCounts)
-  let bestCost = totalPartnerCost(bestTeams, partnerCounts)
-
-  for (let shift = 1; shift < active.length; shift++) {
-    const rotated = [...active.slice(shift), ...active.slice(0, shift)]
-    const teams = buildTeams(rotated, partnerCounts)
-    const cost = totalPartnerCost(teams, partnerCounts)
-    if (cost < bestCost) {
-      bestCost = cost
-      bestTeams = teams
-    }
-  }
-
-  const reversed = [...active].reverse()
-  const revTeams = buildTeams(reversed, partnerCounts)
-  const revCost = totalPartnerCost(revTeams, partnerCounts)
-  if (revCost < bestCost) {
-    bestTeams = revTeams
-  }
-
+  const recent = recentPartnerSets(session)
+  const bestTeams = bestPartnerMatching(active, partnerCounts, recent)
   const paired = matchTeams(bestTeams)
   const matches: Match[] = paired.map((m, i) => ({
     id: createId('match'),
@@ -187,8 +330,12 @@ export function generateNextRound(session: Session): Round {
   }
 }
 
-function totalPartnerCost(teams: Pair[], partnerCounts: Record<string, number>): number {
-  return teams.reduce((sum, [a, b]) => sum + partnerCost(a, b, partnerCounts), 0)
+function totalPartnerCost(
+  teams: Pair[],
+  partnerCounts: Record<string, number>,
+  recent: Set<string>[] = [],
+): number {
+  return teams.reduce((sum, [a, b]) => sum + pairCost(a, b, partnerCounts, recent), 0)
 }
 
 /** Suggested number of rounds */
@@ -251,6 +398,22 @@ export function unbumpSitOuts(
     next[id] = Math.max(0, (next[id] ?? 0) - 1)
   }
   return next
+}
+
+export function playerSitState(
+  session: Session,
+  playerId: string,
+): { sittingNow: boolean; pendingSit: boolean; pendingPlay: boolean; highlight: boolean } {
+  const round = session.rounds[session.currentRoundIndex]
+  const sittingNow = Boolean(round?.sittingOut.includes(playerId))
+  const pendingSit = Boolean(session.sitRequests?.sit.includes(playerId))
+  const pendingPlay = Boolean(session.sitRequests?.play.includes(playerId))
+  return {
+    sittingNow,
+    pendingSit,
+    pendingPlay,
+    highlight: sittingNow || pendingSit,
+  }
 }
 
 export function currentRoundHasScores(session: Session): boolean {

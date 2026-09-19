@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { activePlayers, sitOutHint, suggestedCourts } from '../lib/schedule'
+import { activePlayers, playerSitState, sitOutHint, suggestedCourts } from '../lib/schedule'
 import { canContinuePlay } from '../lib/session'
 import type { Session } from '../lib/types'
 import { PlayerNameEdit } from './PlayerNameEdit'
@@ -9,7 +9,7 @@ interface Props {
   /** Player ids sitting out the current round */
   sittingOutIds?: string[]
   onAdd: (name: string) => string | null
-  onLeave: (id: string) => string | null
+  onToggleSit: (id: string) => string | null
   onRename: (id: string, name: string) => string | null
 }
 
@@ -17,7 +17,7 @@ export function RosterPanel({
   session,
   sittingOutIds = [],
   onAdd,
-  onLeave,
+  onToggleSit,
   onRename,
 }: Props) {
   const [name, setName] = useState('')
@@ -45,14 +45,14 @@ export function RosterPanel({
     }
   }
 
-  function handleLeave(id: string, playerName: string) {
+  function handleSit(id: string) {
     setError(null)
     setMessage(null)
-    const resultMsg = onLeave(id)
+    const resultMsg = onToggleSit(id)
     if (resultMsg && resultMsg.startsWith('ERR:')) {
       setError(resultMsg.slice(4))
-    } else {
-      setMessage(resultMsg ?? `${playerName} left — round updated`)
+    } else if (resultMsg) {
+      setMessage(resultMsg)
     }
   }
 
@@ -60,8 +60,10 @@ export function RosterPanel({
     <section className="card roster-panel">
       <h2>Players ({active.length} active)</h2>
       <p className="hint">
-        Late arrivals join with 0 points. Someone leaving keeps their points on the
-        board (marked left). Tap Edit to fix a misspelled name.
+        Late arrivals join with 0 points. <strong>Sit</strong> benches someone for this
+        (or the next) round — they stay in the session. Highlighted Sit means they’re
+        sat (manual or a system bye); tap again to unsit and sit someone else.
+        Tap Edit to fix a misspelled name.
       </p>
 
       <form className="add-row" onSubmit={handleAdd}>
@@ -112,22 +114,37 @@ export function RosterPanel({
 
       <ul className="player-list roster-list">
         {active.map((p) => {
-          const sitting = sittingSet.has(p.id)
+          const sit = playerSitState(session, p.id)
+          const sitting = sittingSet.has(p.id) || sit.sittingNow
+          const badge = sit.sittingNow ? (
+            <span className="sitting-badge">sitting</span>
+          ) : sit.pendingSit ? (
+            <span className="sitting-badge">sits next</span>
+          ) : null
           return (
-            <li key={p.id} className={sitting ? 'player-sitting player-list-item' : 'player-list-item'}>
-              <PlayerNameEdit
-                name={p.name}
-                onSave={(next) => onRename(p.id, next)}
-                badge={sitting ? <span className="sitting-badge">sitting</span> : null}
-              />
+            <li
+              key={p.id}
+              className={sitting || sit.pendingSit ? 'player-sitting player-list-item' : 'player-list-item'}
+            >
+              <PlayerNameEdit name={p.name} onSave={(next) => onRename(p.id, next)} badge={badge} />
               <span className="roster-pts">{session.scores[p.id] ?? 0} pts</span>
               <button
                 type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => handleLeave(p.id, p.name)}
-                aria-label={`Remove ${p.name}`}
+                className={`btn btn-sm btn-sit${sit.highlight ? ' sit-active' : ''}`}
+                onClick={() => handleSit(p.id)}
+                aria-pressed={sit.highlight}
+                aria-label={sit.highlight ? `${p.name} is sitting — tap to unsit` : `Sit ${p.name}`}
+                title={
+                  sit.sittingNow && sit.pendingPlay
+                    ? 'Sitting this round · will play next'
+                    : sit.pendingSit
+                      ? 'Will sit next round'
+                      : sit.sittingNow
+                        ? 'Sitting this round'
+                        : 'Sit this / next round'
+                }
               >
-                Leave
+                Sit
               </button>
             </li>
           )

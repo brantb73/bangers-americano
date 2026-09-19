@@ -52,12 +52,17 @@ export function applyScore(
   )
 
   const entry: ScoreEntry = { roundIndex, matchId, scoreA, scoreB, deltas }
+  const firstScoreInRound = !round.matches.some(isMatchComplete)
 
   return {
     ...session,
     scores,
     rounds,
     scoreLog: [...session.scoreLog, entry],
+    // Sit requests for the current unscored round are already baked into sittingOut.
+    // Clear them so they don't re-apply on the next generate. Later toggles
+    // (after a score) stay pending for the following round.
+    sitRequests: firstScoreInRound ? { sit: [], play: [] } : session.sitRequests,
   }
 }
 

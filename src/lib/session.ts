@@ -4,10 +4,14 @@ import { isRoundComplete } from './scoring'
 import {
   activePlayers,
   bumpSitOuts,
+  canFieldCourtAfterSits,
   currentRoundHasScores,
+  emptySitRequests,
   generateNextRound,
   isPlayerActive,
+  normalizeSitRequests,
   playingSlots,
+  playerSitState,
   recordPartnerships,
   unbumpSitOuts,
   unrecordPartnerships,
@@ -28,6 +32,7 @@ export function createEmptySession(): Session {
     status: 'setup',
     phase: 'americano',
     kingsCourtSeed: 'standings',
+    sitRequests: emptySitRequests(),
     scores: {},
     sitOutCounts: {},
     partnerCounts: {},
@@ -265,6 +270,10 @@ export function leavePlayer(session: Session, playerId: string): RosterChangeRes
     players: session.players.map((p) =>
       p.id === playerId ? { ...p, active: false } : p,
     ),
+    sitRequests: {
+      sit: (session.sitRequests?.sit ?? []).filter((id) => id !== playerId),
+      play: (session.sitRequests?.play ?? []).filter((id) => id !== playerId),
+    },
   }
 
   try {
@@ -296,6 +305,7 @@ export function startSession(session: Session): Session {
     currentRoundIndex: 0,
     scoreLog: [],
     recapScript: undefined,
+    sitRequests: emptySitRequests(),
     partnerCounts: {},
     sitOutCounts: Object.fromEntries(players.map((p) => [p.id, 0])),
     scores: Object.fromEntries(players.map((p) => [p.id, 0])),
@@ -326,10 +336,78 @@ export function advanceToNextRound(session: Session): Session {
   const round = generatePlayRound(session)
   return {
     ...session,
+    sitRequests: emptySitRequests(),
     rounds: [...session.rounds, round],
     currentRoundIndex: session.rounds.length,
     partnerCounts: recordPartnerships(session.partnerCounts, round.matches),
     sitOutCounts: bumpSitOuts(session.sitOutCounts, round.sittingOut),
+  }
+}
+
+/**
+ * Sit / unsit a player for the current (unscored) or next (scored) round.
+ * They stay in the session — this is not “left early”.
+ */
+export function toggleSit(session: Session, playerId: string): RosterChangeResult {
+  if (session.status !== 'active') {
+    return { session, ok: false, reason: 'Can only sit during play' }
+  }
+  const player = session.players.find((p) => p.id === playerId)
+  if (!player) return { session, ok: false, reason: 'Player not found' }
+  if (!isPlayerActive(player)) {
+    return { session, ok: false, reason: 'Player already left' }
+  }
+
+  const state = playerSitState(session, playerId)
+  const wantSit = !state.highlight
+  const req = normalizeSitRequests(session.sitRequests)
+  const sit = new Set(req.sit)
+  const play = new Set(req.play)
+
+  if (wantSit) {
+    sit.add(playerId)
+    play.delete(playerId)
+  } else {
+    sit.delete(playerId)
+    play.add(playerId)
+  }
+
+  const nextRequests = { sit: [...sit], play: [...play] }
+  const active = activePlayers(session)
+  if (wantSit && !canFieldCourtAfterSits(active.length, session.courts, nextRequests.sit)) {
+    return {
+      session,
+      ok: false,
+      reason: 'Need at least 4 players on court — unsit someone first',
+    }
+  }
+
+  const next: Session = { ...session, sitRequests: nextRequests }
+
+  if (currentRoundHasScores(next)) {
+    return {
+      session: next,
+      ok: true,
+      regenerated: false,
+      reason: wantSit
+        ? `${player.name} will sit next round`
+        : `${player.name} will play next round`,
+    }
+  }
+
+  try {
+    const regenerated = regenerateCurrentRound(next)
+    return {
+      session: regenerated,
+      ok: true,
+      regenerated: true,
+    }
+  } catch (e) {
+    return {
+      session,
+      ok: false,
+      reason: e instanceof Error ? e.message : 'Could not rebuild round',
+    }
   }
 }
 
@@ -485,6 +563,7 @@ export function normalizeSession(parsed: Session): Session {
     players,
     phase: parsed.phase === 'kingsCourt' ? 'kingsCourt' : 'americano',
     kingsCourtSeed: parsed.kingsCourtSeed === 'random' ? 'random' : 'standings',
+    sitRequests: normalizeSitRequests(parsed.sitRequests),
     rounds,
     scores: parsed.scores ?? {},
     sitOutCounts: parsed.sitOutCounts ?? {},

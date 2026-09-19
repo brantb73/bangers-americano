@@ -7,6 +7,7 @@ import {
   leavePlayer,
   regenerateCurrentRound,
   startSession,
+  toggleSit,
 } from './session'
 import type { Player, Session } from './types'
 
@@ -150,6 +151,54 @@ describe('normalize / continue preserves inactive', () => {
     expect(left.ok).toBe(true)
     const normalized = normalizeSession(JSON.parse(JSON.stringify(left.session)))
     expect(normalized.players.find((p) => p.id === 'p2')!.active).toBe(false)
+  })
+})
+
+describe('toggleSit', () => {
+  it('sits a player and rebuilds an unscored round', () => {
+    const session = makeActiveSession(8, 2)
+    expect(session.rounds[0]!.sittingOut).toHaveLength(0)
+
+    const result = toggleSit(session, 'p0')
+    expect(result.ok).toBe(true)
+    expect(result.regenerated).toBe(true)
+    expect(result.session.rounds[0]!.sittingOut).toContain('p0')
+    const onCourt = result.session.rounds[0]!.matches.flatMap((m) => [
+      ...m.teamA,
+      ...m.teamB,
+    ])
+    expect(onCourt).not.toContain('p0')
+    expect(result.session.players.find((p) => p.id === 'p0')!.active).not.toBe(false)
+  })
+
+  it('highlights system byes so the manager can unsit and swap', () => {
+    const session = makeActiveSession(10, 2)
+    const systemSit = session.rounds[0]!.sittingOut[0]!
+    expect(systemSit).toBeTruthy()
+
+    const unsit = toggleSit(session, systemSit)
+    expect(unsit.ok).toBe(true)
+    expect(unsit.regenerated).toBe(true)
+    expect(unsit.session.rounds[0]!.sittingOut).not.toContain(systemSit)
+    expect(unsit.session.rounds[0]!.sittingOut).toHaveLength(2)
+
+    const onCourt = unsit.session.rounds[0]!.matches.flatMap((m) => [
+      ...m.teamA,
+      ...m.teamB,
+    ])
+    expect(onCourt).toContain(systemSit)
+  })
+
+  it('defers sit changes to the next round when scores exist', () => {
+    let session = makeActiveSession(8, 2)
+    session = applyScore(session, 0, session.rounds[0]!.matches[0]!.id, 11, 5)
+
+    const result = toggleSit(session, 'p3')
+    expect(result.ok).toBe(true)
+    expect(result.regenerated).toBe(false)
+    expect(result.reason).toMatch(/next round/i)
+    expect(result.session.rounds[0]!.matches[0]!.scoreA).toBe(11)
+    expect(result.session.sitRequests?.sit).toContain('p3')
   })
 })
 
