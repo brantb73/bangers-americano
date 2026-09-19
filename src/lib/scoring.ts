@@ -52,12 +52,17 @@ export function applyScore(
   )
 
   const entry: ScoreEntry = { roundIndex, matchId, scoreA, scoreB, deltas }
+  const firstScoreInRound = !round.matches.some(isMatchComplete)
 
   return {
     ...session,
     scores,
     rounds,
     scoreLog: [...session.scoreLog, entry],
+    // Sit requests for the current unscored round are already baked into sittingOut.
+    // Clear them so they don't re-apply on the next generate. Later toggles
+    // (after a score) stay pending for the following round.
+    sitRequests: firstScoreInRound ? { sit: [], play: [] } : session.sitRequests,
   }
 }
 
@@ -113,6 +118,23 @@ export function gamesWon(session: Session, playerId: string): number {
   return n
 }
 
+/** Wins counted only on King’s Court rounds. */
+export function kingsCourtWins(session: Session, playerId: string): number {
+  let n = 0
+  for (const round of session.rounds) {
+    if (round.kind !== 'kingsCourt') continue
+    for (const m of round.matches) {
+      if (!isMatchComplete(m)) continue
+      const onA = m.teamA.includes(playerId)
+      const onB = m.teamB.includes(playerId)
+      if (!onA && !onB) continue
+      if (onA && m.scoreA! > m.scoreB!) n++
+      if (onB && m.scoreB! > m.scoreA!) n++
+    }
+  }
+  return n
+}
+
 function compareStandings(a: Standing, b: Standing): number {
   // Wins first, then points, then games played, then name
   if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon
@@ -128,6 +150,7 @@ export function computeStandings(session: Session): Standing[] {
     points: session.scores[p.id] ?? 0,
     gamesPlayed: gamesPlayed(session, p.id),
     gamesWon: gamesWon(session, p.id),
+    kingsCourtWins: kingsCourtWins(session, p.id),
     sitOuts: session.sitOutCounts[p.id] ?? 0,
     rank: 0,
     active: p.active !== false,

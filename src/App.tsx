@@ -47,10 +47,11 @@ export default function App() {
           onSetPointsToWin={api.setPointsToWin}
           onSetWinBy={api.setWinBy}
           onAddPlayer={api.addPlayerDuringPlay}
-          onLeavePlayer={api.leavePlayerDuringPlay}
+          onToggleSit={api.toggleSitDuringPlay}
           onSaveComment={api.saveComment}
           onSaveRoundNote={api.saveRoundNote}
           onRenamePlayer={api.renamePlayer}
+          onSwitchToKingsCourt={api.switchToKingsCourt}
         />
       )}
       {session.status === 'finished' && (

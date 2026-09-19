@@ -11,7 +11,7 @@ import { SettingsPanel } from './SettingsPanel'
 interface Props {
   session: Session
   history: SessionHistoryEntry[]
-  onAddPlayer: (name: string) => void
+  onAddPlayer: (name: string) => string | null
   onRemovePlayer: (id: string) => void
   onRenamePlayer: (id: string, name: string) => string | null
   onSetCourts: (n: number) => void
@@ -44,13 +44,19 @@ export function SetupScreen({
   onDataImported,
 }: Props) {
   const [name, setName] = useState('')
+  const [addError, setAddError] = useState<string | null>(null)
   const check = canStart(session)
   const byeHint = sitOutHint(session.players.length, session.courts)
 
   function handleAdd(e: FormEvent) {
     e.preventDefault()
     if (!name.trim()) return
-    onAddPlayer(name)
+    const err = onAddPlayer(name)
+    if (err) {
+      setAddError(err)
+      return
+    }
+    setAddError(null)
     setName('')
   }
 
@@ -66,6 +72,11 @@ export function SetupScreen({
           After each game, every player <strong>banks their team’s points</strong>. Live
           standings rank by <strong>wins first</strong>, with points breaking ties — watch
           placement move as rounds go on.
+        </p>
+        <p>
+          Optional hybrid night: start as an Americano mixer, then tap{' '}
+          <strong>Switch to King’s Court</strong> to finish — Court 1 is the throne,
+          winners move up, losers move down, partners split.
         </p>
         <p className="hint device-hint" role="note">
           Sessions are saved on this device/browser only — use Export/Import to move them.
@@ -97,7 +108,10 @@ export function SetupScreen({
             enterKeyHint="done"
             placeholder="Player name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value)
+              setAddError(null)
+            }}
             maxLength={24}
             autoComplete="off"
           />
@@ -109,6 +123,11 @@ export function SetupScreen({
             Add
           </button>
         </form>
+        {addError && (
+          <p className="warn" role="alert">
+            {addError}
+          </p>
+        )}
         <ul className="player-list">
           {session.players.map((p, i) => (
             <li key={p.id} className="player-list-item">

@@ -1,8 +1,14 @@
 import { useState } from 'react'
+import {
+  courtMovementHint,
+  courtTitle,
+  describeMatchMovement,
+  kingsCourtMatchCourts,
+} from '../lib/kingsCourt'
 import { activePlayers } from '../lib/schedule'
 import { isRoundComplete, scoringRuleSummary } from '../lib/scoring'
-import { canContinuePlay } from '../lib/session'
-import type { Session, WinBy } from '../lib/types'
+import { canContinuePlay, canSwitchToKingsCourt } from '../lib/session'
+import type { KingsCourtSeed, Session, WinBy } from '../lib/types'
 import { RosterPanel } from './RosterPanel'
 import { ScoreEntry } from './ScoreEntry'
 import { SettingsPanel } from './SettingsPanel'
@@ -19,10 +25,11 @@ interface Props {
   onSetPointsToWin: (n: number) => void
   onSetWinBy: (n: WinBy) => void
   onAddPlayer: (name: string) => string | null
-  onLeavePlayer: (id: string) => string | null
+  onToggleSit: (id: string) => string | null
   onSaveComment: (roundIndex: number, matchId: string, comment: string) => void
   onSaveRoundNote: (roundIndex: number, note: string) => void
   onRenamePlayer: (id: string, name: string) => string | null
+  onSwitchToKingsCourt: (seed: KingsCourtSeed) => void
 }
 
 export function PlayScreen({
@@ -34,16 +41,19 @@ export function PlayScreen({
   onSetPointsToWin,
   onSetWinBy,
   onAddPlayer,
-  onLeavePlayer,
+  onToggleSit,
   onSaveComment,
   onSaveRoundNote,
   onRenamePlayer,
+  onSwitchToKingsCourt,
 }: Props) {
   const [showSettings, setShowSettings] = useState(false)
   const [showRoster, setShowRoster] = useState(false)
   const [showStandings, setShowStandings] = useState(true)
   const [editingNote, setEditingNote] = useState(false)
   const [noteDraft, setNoteDraft] = useState('')
+  const [kcConfirm, setKcConfirm] = useState(false)
+  const [kcSeed, setKcSeed] = useState<KingsCourtSeed>('standings')
 
   const round = session.rounds[session.currentRoundIndex]
   if (!round) {
@@ -60,16 +70,20 @@ export function PlayScreen({
   const rule = scoringRuleSummary(session.pointsToWin, winBy)
   const activeCount = activePlayers(session).length
   const ri = session.currentRoundIndex
+  const isKc = session.phase === 'kingsCourt'
+  const switchCheck = canSwitchToKingsCourt(session)
+  const kcCourts = isKc ? kingsCourtMatchCourts(session) : session.courts
 
   return (
     <div className="screen play">
       <header className="top-bar">
         <div>
           <BrandLogo size="compact" />
-          <h1>Round {round.number}</h1>
+          <h1>{isKc ? `King’s Court · Round ${round.number}` : `Round ${round.number}`}</h1>
           <p className="tagline">
-            {rule} · {session.courts} court{session.courts === 1 ? '' : 's'} ·{' '}
-            {activeCount} players
+            {isKc
+              ? `Court 1 is King’s · winners up, losers down, partners split · ${rule} · ${kcCourts} court${kcCourts === 1 ? '' : 's'} · ${activeCount} players`
+              : `${rule} · ${session.courts} court${session.courts === 1 ? '' : 's'} · ${activeCount} players`}
           </p>
         </div>
         <div className="top-actions">
@@ -111,7 +125,7 @@ export function PlayScreen({
           session={session}
           sittingOutIds={round.sittingOut}
           onAdd={onAddPlayer}
-          onLeave={onLeavePlayer}
+          onToggleSit={onToggleSit}
           onRename={onRenamePlayer}
         />
       )}
@@ -131,7 +145,14 @@ export function PlayScreen({
         </p>
       )}
 
-      <SittingOutCard sitters={round.sittingOut.length > 0 ? sitters : []} />
+      <SittingOutCard
+        sitters={round.sittingOut.length > 0 ? sitters : []}
+        note={
+          isKc
+            ? 'rotates at the bottom courts, fewest sits first'
+            : undefined
+        }
+      />
 
       <div className="matches">
         {round.matches.map((m) => (
@@ -144,6 +165,12 @@ export function PlayScreen({
             onSubmit={(a, b) => onSubmitScore(ri, m.id, a, b)}
             onSaveComment={(c) => onSaveComment(ri, m.id, c)}
             commentsEditable
+            courtLabel={isKc ? courtTitle(m.court) : undefined}
+            movementHint={isKc ? courtMovementHint(m.court, kcCourts) : undefined}
+            resultMoveNote={
+              isKc ? describeMatchMovement(m, kcCourts, session.players) : null
+            }
+            cardClassName={isKc && m.court === 1 ? 'kings-court-card' : undefined}
           />
         ))}
       </div>
@@ -221,6 +248,75 @@ export function PlayScreen({
             End session
           </button>
         </div>
+      )}
+
+      {!isKc && (
+        <section className="card kc-switch-card">
+          <h2>King’s Court finish</h2>
+          <p className="hint">
+            Optional endgame: Court 1 is King’s. Winners move up, losers move down,
+            partners split. Points keep banking; King’s Court wins show on the
+            board. Final rank is still wins first, then points.
+          </p>
+          {!switchCheck.ok && (
+            <p className="warn" role="status">
+              {switchCheck.reason}
+            </p>
+          )}
+          {kcConfirm ? (
+            <div className="confirm-row">
+              <h3 className="kc-seed-label">Seed the ladder</h3>
+              <div className="segmented segmented-2">
+                <button
+                  type="button"
+                  className={kcSeed === 'standings' ? 'seg active' : 'seg'}
+                  onClick={() => setKcSeed('standings')}
+                >
+                  Standings
+                </button>
+                <button
+                  type="button"
+                  className={kcSeed === 'random' ? 'seg active' : 'seg'}
+                  onClick={() => setKcSeed('random')}
+                >
+                  Random
+                </button>
+              </div>
+              <p className="hint">
+                {kcSeed === 'standings'
+                  ? 'Top Americano standings (wins, then points) start toward Court 1.'
+                  : 'Shuffle the ladder, then play King’s Court rules.'}
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary btn-block"
+                disabled={!switchCheck.ok}
+                onClick={() => {
+                  onSwitchToKingsCourt(kcSeed)
+                  setKcConfirm(false)
+                }}
+              >
+                Start King’s Court
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-block"
+                onClick={() => setKcConfirm(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary btn-block"
+              disabled={!switchCheck.ok}
+              onClick={() => setKcConfirm(true)}
+            >
+              Switch to King’s Court
+            </button>
+          )}
+        </section>
       )}
 
       <section className="card standings-card">

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { usedKingsCourt } from '../lib/kingsCourt'
 import { computeStandings } from '../lib/scoring'
 import type { Session, Standing } from '../lib/types'
 
@@ -25,6 +26,7 @@ export function Standings({
   highlightChanges,
 }: Props) {
   const rows = computeStandings(session)
+  const showKc = usedKingsCourt(session)
   const prevRanks = useRef<Record<string, number>>({})
   const [deltas, setDeltas] = useState<Record<string, number>>({})
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set())
@@ -64,6 +66,9 @@ export function Standings({
         <p className="hint standings-explain">
           Ranked by <strong>games won</strong>, then total points banked (team score each
           game). Further ties: games played, then name.
+          {showKc
+            ? ' King’s Court wins are listed separately; they already count in games won.'
+            : ''}
         </p>
       )}
       <ol className="standings-list">
@@ -103,6 +108,7 @@ export function Standings({
               </span>
               <span className="meta">
                 {r.gamesPlayed}g · {r.gamesWon}w
+                {showKc ? ` · ${r.kingsCourtWins} kc` : ''}
                 {!compact ? ` · ${r.sitOuts} bye` : ''}
               </span>
             </li>

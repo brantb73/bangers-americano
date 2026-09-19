@@ -59,8 +59,8 @@ export function SettingsPanel({
       </p>
       <p className="hint">
         Each player earns the points their team scored that game. Leaderboard ranks by
-        games won first (then points, then name). Use <strong>Sudden death</strong> on
-        score entry to end a game early with a winner.
+        games won first (then points, then name). Same scoring in King’s Court. Use{' '}
+        <strong>Sudden death</strong> on score entry to end a game early with a winner.
       </p>
       <p className="hint">
         Fix a misspelled name under <strong>Players</strong> (Edit on the setup list, or

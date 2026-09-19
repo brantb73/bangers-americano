@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { createId, pairKey } from './ids'
 import {
+  bestPartnerMatching,
   buildTeams,
   chooseSitOuts,
   generateNextRound,
+  partnerKeysFromMatches,
   playingSlots,
   recordPartnerships,
   sitOutCount,
@@ -74,6 +76,15 @@ describe('chooseSitOuts', () => {
 
   it('returns empty when no sit-outs needed', () => {
     expect(chooseSitOuts(makePlayers(8), 2, {})).toEqual([])
+  })
+
+  it('honors manager sit/play swap', () => {
+    const players = makePlayers(10)
+    const counts = Object.fromEntries(players.map((p) => [p.id, 0]))
+    const swapped = chooseSitOuts(players, 2, counts, { sit: ['p9'], play: ['p1'] })
+    expect(swapped).toHaveLength(2)
+    expect(swapped).toContain('p9')
+    expect(swapped).not.toContain('p1')
   })
 })
 
@@ -164,6 +175,50 @@ describe('generateNextRound', () => {
     // 8 players: each has 7 possible partners; over 7 rounds each plays 7 games
     // with 1 partner each → 8*7/2 = 28 partner-slots; unique should be high
     expect(partnerSeen.size).toBeGreaterThanOrEqual(14)
+  })
+
+  it('does not rematch last-round partners when another pairing exists', () => {
+    let session = startSession(baseSession(8, 2))
+    const firstKeys = partnerKeysFromMatches(session.rounds[0]!.matches)
+    expect(firstKeys.size).toBe(4)
+
+    // Simulate forgotten lifetime counts — still must not rematch last partners.
+    session = { ...session, partnerCounts: {} }
+    const next = generateNextRound(session)
+    const nextKeys = partnerKeysFromMatches(next.matches)
+    for (const key of firstKeys) {
+      expect(nextKeys.has(key)).toBe(false)
+    }
+  })
+
+  it('avoids consecutive partner repeats across many Americano rounds', () => {
+    let session = startSession(baseSession(8, 2))
+    for (let i = 0; i < 12; i++) {
+      const prev = partnerKeysFromMatches(session.rounds[session.rounds.length - 1]!.matches)
+      const next = generateNextRound(session)
+      const nextKeys = partnerKeysFromMatches(next.matches)
+      for (const key of prev) {
+        expect(nextKeys.has(key)).toBe(false)
+      }
+      session = {
+        ...session,
+        rounds: [...session.rounds, next],
+        currentRoundIndex: session.rounds.length,
+        partnerCounts: recordPartnerships(session.partnerCounts, next.matches),
+      }
+    }
+  })
+})
+
+describe('bestPartnerMatching', () => {
+  it('refuses an obvious last-round rematch when a new pairing exists', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+    const last = new Set([pairKey('a', 'b'), pairKey('c', 'd'), pairKey('e', 'f'), pairKey('g', 'h')])
+    const teams = bestPartnerMatching(ids, {}, [last])
+    const keys = teams.map(([x, y]) => pairKey(x, y))
+    for (const key of last) {
+      expect(keys).not.toContain(key)
+    }
   })
 })
 

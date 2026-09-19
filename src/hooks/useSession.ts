@@ -30,8 +30,10 @@ import {
   setRoundNote,
   setWinBy,
   startSession,
+  switchToKingsCourt,
+  toggleSit,
 } from '../lib/session'
-import type { Session, SessionHistoryEntry, WinBy } from '../lib/types'
+import type { KingsCourtSeed, Session, SessionHistoryEntry, WinBy } from '../lib/types'
 
 export function useSession() {
   const [session, setSession] = useState<Session>(() => loadSession() ?? createEmptySession())
@@ -55,8 +57,17 @@ export function useSession() {
     session,
     history,
     hydrated,
-    addPlayer: (name: string) => {
-      update((s) => addPlayer(s, name).session)
+    addPlayer: (name: string): string | null => {
+      let err: string | null = null
+      setSession((s) => {
+        const result = addPlayer(s, name)
+        if (!result.ok) {
+          err = result.reason ?? 'Could not add'
+          return s
+        }
+        return result.session
+      })
+      return err
     },
     addPlayerDuringPlay: (name: string): string | null => {
       let msg: string | null = null
@@ -102,10 +113,31 @@ export function useSession() {
       })
       return msg
     },
+    toggleSitDuringPlay: (id: string): string | null => {
+      let msg: string | null = null
+      setSession((s) => {
+        const result = toggleSit(s, id)
+        if (!result.ok) {
+          msg = `ERR:${result.reason ?? 'Could not sit'}`
+          return s
+        }
+        const name = s.players.find((p) => p.id === id)?.name ?? 'Player'
+        if (result.regenerated) {
+          const sitting = result.session.rounds[result.session.currentRoundIndex]?.sittingOut.includes(id)
+          msg = sitting ? `${name} sitting — round updated` : `${name} playing — round updated`
+        } else {
+          msg = result.reason ?? `${name} updated`
+        }
+        return result.session
+      })
+      return msg
+    },
     setCourts: (n: number) => update((s) => setCourts(s, n)),
     setPointsToWin: (n: number) => update((s) => setPointsToWin(s, n)),
     setWinBy: (n: WinBy) => update((s) => setWinBy(s, n)),
     start: () => update((s) => startSession(s)),
+    switchToKingsCourt: (seed: KingsCourtSeed = 'standings') =>
+      update((s) => switchToKingsCourt(s, seed)),
     submitScore: (roundIndex: number, matchId: string, a: number, b: number) =>
       update((s) => applyScore(s, roundIndex, matchId, a, b)),
     saveComment: (roundIndex: number, matchId: string, comment: string) =>

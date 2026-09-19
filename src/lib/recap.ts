@@ -1,3 +1,4 @@
+import { kingsCourtRoundCount, usedKingsCourt } from './kingsCourt'
 import { computeStandings, playerName } from './scoring'
 import type { Match, Round, Session, Standing } from './types'
 
@@ -88,13 +89,21 @@ export function generateSportsCenterRecap(session: Session): string {
   const blowout = biggestBlowout(session)
   const nailbiter = closestFinish(session)
   const sitDrama = session.rounds.some((r) => r.sittingOut.length > 0)
+  const hybrid = usedKingsCourt(session)
+  const kcRounds = kingsCourtRoundCount(session)
 
   const lines: string[] = []
 
   // Podcast cold open — conversational, not stiff TV
-  lines.push(
-    `Hey, welcome back to the Bangers Highlight Reel — your unofficial Americano podcast where the partners rotate, the wins and points pile up, and nobody's ego is safe. Tonight we had ${session.players.length} players, ${session.courts} court${session.courts === 1 ? '' : 's'}, and ${roundsPlayed} round${roundsPlayed === 1 ? '' : 's'} of “who am I playing with again?”`,
-  )
+  if (hybrid) {
+    lines.push(
+      `Hey, welcome back to the Bangers Highlight Reel — your unofficial Americano podcast where the partners rotate, the wins and points pile up, and nobody's ego is safe. Tonight we had ${session.players.length} players, ${session.courts} court${session.courts === 1 ? '' : 's'}, and ${roundsPlayed} round${roundsPlayed === 1 ? '' : 's'} that started as “who am I playing with again?” and finished as King’s Court — Court 1 is the throne, winners climb, losers slide, partners split. ${kcRounds} climb${kcRounds === 1 ? '' : 's'} up the ladder after the mixer.`,
+    )
+  } else {
+    lines.push(
+      `Hey, welcome back to the Bangers Highlight Reel — your unofficial Americano podcast where the partners rotate, the wins and points pile up, and nobody's ego is safe. Tonight we had ${session.players.length} players, ${session.courts} court${session.courts === 1 ? '' : 's'}, and ${roundsPlayed} round${roundsPlayed === 1 ? '' : 's'} of “who am I playing with again?”`,
+    )
+  }
 
   if (champion) {
     const gap = runnerUp ? champion.points - runnerUp.points : champion.points
@@ -200,9 +209,16 @@ export function generateSportsCenterRecap(session: Session): string {
   }
 
   if (champion) {
-    lines.push(
-      `${champion.name} takes the Bangers Americano. ${champion.gamesWon} wins in the book, ${champion.points} points on the board. Wear it proudly. Or smugly. We won't judge. Much.`,
-    )
+    if (hybrid) {
+      const kc = champion.kingsCourtWins
+      lines.push(
+        `${champion.name} takes the Bangers hybrid — Americano miles plus a King’s Court finish. ${champion.gamesWon} wins in the book${kc > 0 ? ` (${kc} of them on the throne climb)` : ''}, ${champion.points} points on the board. Rank is still wins first, then points. Wear it proudly. Or smugly. We won't judge. Much.`,
+      )
+    } else {
+      lines.push(
+        `${champion.name} takes the Bangers Americano. ${champion.gamesWon} wins in the book, ${champion.points} points on the board. Wear it proudly. Or smugly. We won't judge. Much.`,
+      )
+    }
   }
   lines.push(
     `That's the highlight reel. You stay classy, Bangers nation — hydrate, stretch, and maybe don't leave your partner hanging next time. We'll catch you on the next pod.`,

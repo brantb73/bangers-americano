@@ -15,6 +15,14 @@ interface Props {
   onSaveComment?: (comment: string) => void
   /** Allow editing comments (active session or history) */
   commentsEditable?: boolean
+  /** Override default “Court N” label (e.g. Court 1 · King’s). */
+  courtLabel?: string
+  /** Who moves where after this game. */
+  movementHint?: string
+  /** Named movers once the score is in. */
+  resultMoveNote?: string | null
+  /** Extra class on the card (King’s Court throne styling). */
+  cardClassName?: string
 }
 
 export function ScoreEntry({
@@ -25,6 +33,10 @@ export function ScoreEntry({
   onSubmit,
   onSaveComment,
   commentsEditable = true,
+  courtLabel,
+  movementHint,
+  resultMoveNote,
+  cardClassName,
 }: Props) {
   const [a, setA] = useState('')
   const [b, setB] = useState('')
@@ -122,9 +134,9 @@ export function ScoreEntry({
 
   if (done) {
     return (
-      <div className="match-card scored">
+      <div className={`match-card scored ${cardClassName ?? ''}`.trim()}>
         <div className="court-label">
-          Court {match.court}
+          {courtLabel ?? `Court ${match.court}`}
           {hasComment && !editingComment && (
             <span className="comment-indicator" title={match.comment}>
               💬
@@ -144,7 +156,7 @@ export function ScoreEntry({
             <div>{playerName(players, match.teamB[1])}</div>
           </div>
         </div>
-
+        {resultMoveNote ? <p className="move-note">{resultMoveNote}</p> : null}
         {hasComment && !editingComment && (
           <p className="match-comment-preview">“{match.comment}”</p>
         )}
@@ -197,8 +209,9 @@ export function ScoreEntry({
   }
 
   return (
-    <div className="match-card">
-      <div className="court-label">Court {match.court}</div>
+    <div className={`match-card ${cardClassName ?? ''}`.trim()}>
+      <div className="court-label">{courtLabel ?? `Court ${match.court}`}</div>
+      {movementHint ? <p className="movement-hint">{movementHint}</p> : null}
       <div className="score-entry-grid">
         <div className="team-col">
           <div className="team-names">

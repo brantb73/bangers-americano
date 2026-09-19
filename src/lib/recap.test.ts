@@ -61,4 +61,18 @@ describe('generateSportsCenterRecap', () => {
     // Snark markers
     expect(script.toLowerCase()).toMatch(/podcast|highlight reel|participated|bench|smugly|hot take/)
   })
+
+  it('mentions a King’s Court finish when the hybrid phase was used', async () => {
+    const { switchToKingsCourt } = await import('./session')
+    let session = makeSession()
+    const match = session.rounds[0]!.matches[0]!
+    session = applyScore(session, 0, match.id, 11, 5)
+    session = switchToKingsCourt(session, 'standings')
+    const kc = session.rounds[1]!.matches[0]!
+    session = applyScore(session, 1, kc.id, 11, 7)
+
+    const script = generateSportsCenterRecap(session)
+    expect(script).toMatch(/King’s Court/i)
+    expect(script).toMatch(/hybrid|throne|ladder/i)
+  })
 })
