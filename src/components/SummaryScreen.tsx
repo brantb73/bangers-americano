@@ -1,3 +1,4 @@
+import { usedKingsCourt } from '../lib/kingsCourt'
 import { scoringRuleSummary } from '../lib/scoring'
 import type { Session, WinBy } from '../lib/types'
 import { RecapPanel } from './RecapPanel'
@@ -24,6 +25,7 @@ export function SummaryScreen({
   ).length
   const winBy: WinBy = session.winBy === 1 ? 1 : 2
   const rule = scoringRuleSummary(session.pointsToWin, winBy)
+  const hybrid = usedKingsCourt(session)
 
   return (
     <div className="screen summary">
@@ -31,6 +33,7 @@ export function SummaryScreen({
         <BrandLogo size="large" />
         <h1>Final placement</h1>
         <p className="tagline">
+          {hybrid ? 'Americano → King’s Court finish · ' : ''}
           {roundsPlayed} round{roundsPlayed === 1 ? '' : 's'} · {session.players.length}{' '}
           players · {rule}
         </p>

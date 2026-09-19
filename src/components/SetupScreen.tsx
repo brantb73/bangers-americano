@@ -67,6 +67,11 @@ export function SetupScreen({
           standings rank by <strong>wins first</strong>, with points breaking ties — watch
           placement move as rounds go on.
         </p>
+        <p>
+          Optional hybrid night: start as an Americano mixer, then tap{' '}
+          <strong>Switch to King’s Court</strong> to finish — Court 1 is the throne,
+          winners move up, losers move down, partners split.
+        </p>
         <p className="hint device-hint" role="note">
           Sessions are saved on this device/browser only — use Export/Import to move them.
         </p>

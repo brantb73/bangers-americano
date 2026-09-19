@@ -51,6 +51,7 @@ export default function App() {
           onSaveComment={api.saveComment}
           onSaveRoundNote={api.saveRoundNote}
           onRenamePlayer={api.renamePlayer}
+          onSwitchToKingsCourt={api.switchToKingsCourt}
         />
       )}
       {session.status === 'finished' && (

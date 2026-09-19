@@ -30,8 +30,9 @@ import {
   setRoundNote,
   setWinBy,
   startSession,
+  switchToKingsCourt,
 } from '../lib/session'
-import type { Session, SessionHistoryEntry, WinBy } from '../lib/types'
+import type { KingsCourtSeed, Session, SessionHistoryEntry, WinBy } from '../lib/types'
 
 export function useSession() {
   const [session, setSession] = useState<Session>(() => loadSession() ?? createEmptySession())
@@ -106,6 +107,8 @@ export function useSession() {
     setPointsToWin: (n: number) => update((s) => setPointsToWin(s, n)),
     setWinBy: (n: WinBy) => update((s) => setWinBy(s, n)),
     start: () => update((s) => startSession(s)),
+    switchToKingsCourt: (seed: KingsCourtSeed = 'standings') =>
+      update((s) => switchToKingsCourt(s, seed)),
     submitScore: (roundIndex: number, matchId: string, a: number, b: number) =>
       update((s) => applyScore(s, roundIndex, matchId, a, b)),
     saveComment: (roundIndex: number, matchId: string, comment: string) =>

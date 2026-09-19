@@ -59,7 +59,8 @@ If Pages was enabled after the first `main` workflow already ran, open **Actions
 4. **Enter scores** after each court finishes. Validation enforces game-to / win-by by default. **Sudden death — end game now** accepts an early finish (e.g. 5–6) with a clear winner (ties blocked). Each player **banks their team’s points**.
 5. **Players** (mid-session): tap **Players** to add late arrivals (0 pts) or mark leavers — they keep points with a “left” badge and drop out of new pairings. Unscored current rounds regenerate automatically.
 6. View **live placement** (wins, points, games played). Rank is **wins first, points break ties**. Rank changes flash after scores. Settings stay available mid-session.
-7. **End session** for a medal-style final placement. The session is **archived to history by date**. **Undo** reverses the last score entry.
+7. Optional **Switch to King’s Court** finish (confirm): Court 1 is King’s. After each game, winners move up one court, losers move down one; Court 1 winners and Court N losers stay. Partners **split** (teammates become opponents). Seed from current standings (wins, then points) or shuffle. Same game-to / win-by / sudden death scoring; team points keep banking and King’s Court wins show on the board. Sit-outs rotate at the bottom courts.
+8. **End session** for a medal-style final placement. The session is **archived to history by date**. **Undo** reverses the last score entry. The recap mentions a King’s Court finish when you used one.
 
 **Continue session** re-opens the exact scoreboard so you can add more rounds. **Rematch** keeps the same roster/settings with fresh scores.
 
@@ -107,9 +108,9 @@ Long scripts are capped (~4500 characters) with a truncation note. If TTS fails,
 
 **Tunnel:** Cloudflare (or similar) to the Vite server keeps `/api/tts` same-origin, so phone clients work without CORS hacks.
 
-## Out of scope (for now)
+## King’s Court finish
 
-<!-- TODO: King’s Court / hybrid finish — add later as an optional endgame mode. -->
+During an active Americano session, tap **Switch to King’s Court**, confirm the seed (standings by default, or random), and play the ladder. Mid-session add/leave still works when the current round has no scores (same constraints as Americano). Rematch returns to Americano setup.
 
 ## Stack
 

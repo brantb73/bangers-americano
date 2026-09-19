@@ -29,6 +29,25 @@ export function sitOutHint(playerCount: number, courts: number): string | null {
 }
 
 /**
+ * Pick `needed` sitters from a candidate pool: fewest sit-outs first, then id.
+ */
+export function pickSitOutsFrom(
+  candidates: Player[],
+  needed: number,
+  sitOutCounts: Record<string, number>,
+): string[] {
+  if (needed <= 0 || candidates.length === 0) return []
+
+  const sorted = [...candidates].sort((a, b) => {
+    const sa = sitOutCounts[a.id] ?? 0
+    const sb = sitOutCounts[b.id] ?? 0
+    if (sa !== sb) return sa - sb
+    return a.id.localeCompare(b.id)
+  })
+  return sorted.slice(0, Math.min(needed, sorted.length)).map((p) => p.id)
+}
+
+/**
  * Choose who sits out this round: prefer players with fewest sit-outs so far.
  * Tie-break by id for stability.
  */
@@ -37,16 +56,7 @@ export function chooseSitOuts(
   courts: number,
   sitOutCounts: Record<string, number>,
 ): string[] {
-  const needed = sitOutCount(players.length, courts)
-  if (needed <= 0) return []
-
-  const sorted = [...players].sort((a, b) => {
-    const sa = sitOutCounts[a.id] ?? 0
-    const sb = sitOutCounts[b.id] ?? 0
-    if (sa !== sb) return sa - sb
-    return a.id.localeCompare(b.id)
-  })
-  return sorted.slice(0, needed).map((p) => p.id)
+  return pickSitOutsFrom(players, sitOutCount(players.length, courts), sitOutCounts)
 }
 
 type Pair = [string, string]

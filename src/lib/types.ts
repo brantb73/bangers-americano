@@ -25,9 +25,17 @@ export interface Round {
   sittingOut: string[]
   /** Optional short note for the whole round */
   note?: string
+  /** Pairing style for this round. Default americano for older sessions. */
+  kind?: PlayPhase
 }
 
 export type SessionStatus = 'setup' | 'active' | 'finished'
+
+/** Americano mixer vs optional King’s Court finish. */
+export type PlayPhase = 'americano' | 'kingsCourt'
+
+/** How the first King’s Court ladder is seeded. */
+export type KingsCourtSeed = 'standings' | 'random'
 
 /** Margin required to win a game (1 = first to N, 2 = standard pickleball). */
 export type WinBy = 1 | 2
@@ -42,6 +50,13 @@ export interface Session {
   rounds: Round[]
   currentRoundIndex: number
   status: SessionStatus
+  /**
+   * Active pairing mode. Default americano (older saved sessions).
+   * Switching mid-session starts a King’s Court finish.
+   */
+  phase?: PlayPhase
+  /** Seed used when the first King’s Court round is generated. Default standings. */
+  kingsCourtSeed?: KingsCourtSeed
   /** Cumulative points per player id */
   scores: Record<string, number>
   /** Sit-out counts per player id */
@@ -70,6 +85,8 @@ export interface Standing {
   points: number
   gamesPlayed: number
   gamesWon: number
+  /** Wins during King’s Court rounds only (0 if the night stayed Americano). */
+  kingsCourtWins: number
   sitOuts: number
   rank: number
   /** false when player left early */

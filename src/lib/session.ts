@@ -1,4 +1,6 @@
 import { createId } from './ids'
+import { generateKingsCourtRound } from './kingsCourt'
+import { isRoundComplete } from './scoring'
 import {
   activePlayers,
   bumpSitOuts,
@@ -10,7 +12,7 @@ import {
   unbumpSitOuts,
   unrecordPartnerships,
 } from './schedule'
-import type { Player, RosterChangeResult, Session, WinBy } from './types'
+import type { KingsCourtSeed, Player, RosterChangeResult, Round, Session, WinBy } from './types'
 
 export const STORAGE_KEY = 'pickleball-americano-session-v1'
 
@@ -24,6 +26,8 @@ export function createEmptySession(): Session {
     rounds: [],
     currentRoundIndex: 0,
     status: 'setup',
+    phase: 'americano',
+    kingsCourtSeed: 'standings',
     scores: {},
     sitOutCounts: {},
     partnerCounts: {},
@@ -152,7 +156,7 @@ export function regenerateCurrentRound(session: Session): Session {
     sitOutCounts,
     rounds: priorRounds,
   }
-  const generated = generateNextRound(draft)
+  const generated = generatePlayRound(draft)
   const round = { ...generated, number: old.number }
 
   return {
@@ -286,6 +290,8 @@ export function startSession(session: Session): Session {
     ...session,
     players,
     status: 'active',
+    phase: 'americano',
+    kingsCourtSeed: session.kingsCourtSeed === 'random' ? 'random' : 'standings',
     rounds: [],
     currentRoundIndex: 0,
     scoreLog: [],
@@ -306,11 +312,18 @@ export function startSession(session: Session): Session {
   return next
 }
 
+function generatePlayRound(session: Session): Round {
+  if (session.phase === 'kingsCourt') {
+    return generateKingsCourtRound(session)
+  }
+  return generateNextRound(session)
+}
+
 export function advanceToNextRound(session: Session): Session {
   if (session.status !== 'active') return session
   const check = canContinuePlay(session)
   if (!check.ok) throw new Error(check.reason)
-  const round = generateNextRound(session)
+  const round = generatePlayRound(session)
   return {
     ...session,
     rounds: [...session.rounds, round],
@@ -318,6 +331,77 @@ export function advanceToNextRound(session: Session): Session {
     partnerCounts: recordPartnerships(session.partnerCounts, round.matches),
     sitOutCounts: bumpSitOuts(session.sitOutCounts, round.sittingOut),
   }
+}
+
+export function canSwitchToKingsCourt(session: Session): { ok: boolean; reason?: string } {
+  if (session.status !== 'active') {
+    return { ok: false, reason: 'Start a session first' }
+  }
+  if (session.phase === 'kingsCourt') {
+    return { ok: false, reason: 'Already in King’s Court' }
+  }
+  const play = canContinuePlay(session)
+  if (!play.ok) return play
+  if (currentRoundHasScores(session) && !isRoundComplete(session, session.currentRoundIndex)) {
+    return { ok: false, reason: 'Finish or undo scores in this round first' }
+  }
+  return { ok: true }
+}
+
+/**
+ * Flip an active Americano session into a King’s Court finish.
+ * Unscored current round is replaced; a completed round is followed by a new KC round.
+ */
+export function switchToKingsCourt(
+  session: Session,
+  seed: KingsCourtSeed = 'standings',
+): Session {
+  const check = canSwitchToKingsCourt(session)
+  if (!check.ok) throw new Error(check.reason)
+
+  const nextPhase: Session = {
+    ...session,
+    phase: 'kingsCourt',
+    kingsCourtSeed: seed === 'random' ? 'random' : 'standings',
+  }
+
+  const idx = nextPhase.currentRoundIndex
+  const current = nextPhase.rounds[idx]
+  const scored = currentRoundHasScores(nextPhase)
+  const complete = current ? isRoundComplete(nextPhase, idx) : true
+
+  if (current && !scored) {
+    const partnerCounts = unrecordPartnerships(nextPhase.partnerCounts, current.matches)
+    const sitOutCounts = unbumpSitOuts(nextPhase.sitOutCounts, current.sittingOut)
+    const priorRounds = nextPhase.rounds.slice(0, idx)
+    const draft: Session = {
+      ...nextPhase,
+      partnerCounts,
+      sitOutCounts,
+      rounds: priorRounds,
+    }
+    const generated = generateKingsCourtRound(draft)
+    const round = { ...generated, number: current.number }
+    return {
+      ...nextPhase,
+      partnerCounts: recordPartnerships(partnerCounts, round.matches),
+      sitOutCounts: bumpSitOuts(sitOutCounts, round.sittingOut),
+      rounds: nextPhase.rounds.map((r, i) => (i === idx ? round : r)),
+    }
+  }
+
+  if (!current || complete) {
+    const round = generateKingsCourtRound(nextPhase)
+    return {
+      ...nextPhase,
+      rounds: [...nextPhase.rounds, round],
+      currentRoundIndex: nextPhase.rounds.length,
+      partnerCounts: recordPartnerships(nextPhase.partnerCounts, round.matches),
+      sitOutCounts: bumpSitOuts(nextPhase.sitOutCounts, round.sittingOut),
+    }
+  }
+
+  throw new Error('Finish or undo scores in this round first')
 }
 
 
@@ -375,6 +459,8 @@ export function resetToSetup(session: Session): Session {
     courts: session.courts,
     pointsToWin: session.pointsToWin,
     winBy: session.winBy ?? 2,
+    phase: 'americano',
+    kingsCourtSeed: 'standings',
   }
 }
 
@@ -388,12 +474,18 @@ export function normalizeSession(parsed: Session): Session {
     ...p,
     active: p.active !== false,
   }))
+  const rounds = (Array.isArray(parsed.rounds) ? parsed.rounds : []).map((r) => ({
+    ...r,
+    kind: r.kind === 'kingsCourt' ? ('kingsCourt' as const) : r.kind === 'americano' ? ('americano' as const) : undefined,
+  }))
   return {
     ...parsed,
     winBy,
     pointsToWin,
     players,
-    rounds: Array.isArray(parsed.rounds) ? parsed.rounds : [],
+    phase: parsed.phase === 'kingsCourt' ? 'kingsCourt' : 'americano',
+    kingsCourtSeed: parsed.kingsCourtSeed === 'random' ? 'random' : 'standings',
+    rounds,
     scores: parsed.scores ?? {},
     sitOutCounts: parsed.sitOutCounts ?? {},
     partnerCounts: parsed.partnerCounts ?? {},
