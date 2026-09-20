@@ -73,7 +73,18 @@ function escapeXml(text: string): string {
 }
 
 function stripInvalidXml(text: string): string {
-  return text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, ' ')
+  let out = ''
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0
+    const strip =
+      code <= 0x08 ||
+      code === 0x0b ||
+      code === 0x0c ||
+      (code >= 0x0e && code <= 0x1f) ||
+      (code >= 0x7f && code <= 0x9f)
+    out += strip ? ' ' : ch
+  }
+  return out
 }
 
 function prepareText(raw: string): { text: string; truncated: boolean } {
