@@ -56,7 +56,7 @@ If Pages was enabled after the first `main` workflow already ran, open **Actions
 1. **Add players** (4–16; typical 8–16).
 2. **Settings:** courts (1–4), **game to** (9 / 11 / 15 / 21), and **win by** (1 or **2**, default **2**). Summary shows e.g. “First to 11, win by 2”.
 3. **Start** — generates Round 1 with whist/Americano-style pairings (maximizes unique partners).
-4. **Enter scores** after each court finishes. Validation enforces game-to / win-by by default. **Sudden death — end game now** accepts an early finish (e.g. 5–6) with a clear winner (ties blocked). Each player gets the **point differential** (win 11–5 → +6; lose 11–5 → −6; sudden death 6–5 → +1).
+4. **Enter scores** after each court finishes. Validation enforces game-to / win-by by default. **Sudden death — end game now** accepts an early finish (e.g. 5–6) with a clear winner (ties blocked). Each player gets the **point differential** (win 11–5 → +6; lose 11–5 → −6; sudden death 6–5 → +1). Wrong court? Tap the score or **Edit score** — the same pad opens prefilled; Save replaces that result and rebuilds wins, differential, and standings. **Undo** still clears the last *new* score entry (not a specific court’s correction).
 5. **Players** (mid-session): tap **Players** to add late arrivals (0 differential) or **Sit** someone for this/next round (they stay in the session). A highlighted Sit is a bye — system or manual — tap again to unsit and sit someone else. Unscored current rounds regenerate automatically; if scores are in, sit changes apply next round.
 6. View **live placement** (wins, differential +/−, games played). Rank is **wins first, differential breaks ties**. Rank changes flash after scores. Settings stay available mid-session.
 7. Optional **Switch to King’s Court** finish (confirm): Court 1 is King’s. After each game, winners move up one court, losers move down one; Court 1 winners and Court N losers stay. Partners **split** (teammates become opponents). Seed from current standings (wins, then differential) or shuffle. Same game-to / win-by / sudden death scoring; differential keeps accumulating and King’s Court wins show on the board. Sit-outs rotate at the bottom courts.
@@ -111,6 +111,8 @@ Long scripts are capped (~4500 characters) with a truncation note. If TTS fails,
 ## King’s Court finish
 
 During an active Americano session, tap **Switch to King’s Court**, confirm the seed (standings by default, or random), and play the ladder. Mid-session add/leave still works when the current round has no scores (same constraints as Americano). Rematch returns to Americano setup.
+
+**Editing a King’s Court score:** wins, differential, and standings always update. If you’re still on that round, the next ladder uses the corrected winners/losers. If you already advanced and the **next** KC round has no scores yet, that round is rebuilt from the corrected results (standings re-seed for the first KC ladder, or winner/loser movement for later KC rounds). If later KC rounds already have scores, those pairings stay put — only the board updates (a full rewind would wipe those games). A random-seeded first KC round is not reshuffled.
 
 ## Stack
 

@@ -9,7 +9,7 @@ import {
   updateHistoryRecap,
 } from '../lib/history'
 import { generateSportsCenterRecap } from '../lib/recap'
-import { applyScore, undoLastScore } from '../lib/scoring'
+import { undoLastScore } from '../lib/scoring'
 import {
   addPlayer,
   advanceToNextRound,
@@ -22,6 +22,7 @@ import {
   renamePlayer,
   reopenSession,
   resetToSetup,
+  saveMatchScore,
   saveSession,
   setCourts,
   setMatchComment,
@@ -139,7 +140,7 @@ export function useSession() {
     switchToKingsCourt: (seed: KingsCourtSeed = 'standings') =>
       update((s) => switchToKingsCourt(s, seed)),
     submitScore: (roundIndex: number, matchId: string, a: number, b: number) =>
-      update((s) => applyScore(s, roundIndex, matchId, a, b)),
+      update((s) => saveMatchScore(s, roundIndex, matchId, a, b)),
     saveComment: (roundIndex: number, matchId: string, comment: string) =>
       update((s) => setMatchComment(s, roundIndex, matchId, comment)),
     saveRoundNote: (roundIndex: number, note: string) =>

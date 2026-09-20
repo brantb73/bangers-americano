@@ -306,6 +306,53 @@
   color: var(--accent);
 }
 
+.score-edit-tap {
+  appearance: none;
+  background: var(--bg-elevated);
+  border: 2px solid var(--accent-dim);
+  color: var(--accent);
+  min-width: 96px;
+  min-height: var(--tap);
+  padding: 8px 14px;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 1.8rem;
+  font-weight: 800;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.score-edit-tap:focus-visible {
+  outline: 2px solid var(--accent);
+  border-color: var(--accent);
+}
+
+.score-edit-hint {
+  margin: 0;
+  text-align: center;
+  font-weight: 650;
+}
+
+.match-card.editing {
+  border-color: var(--warn);
+}
+
+.earlier-rounds {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.earlier-round h3 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+
+.earlier-rounds-card .hint {
+  margin-bottom: 4px;
+}
+
 .team {
   font-weight: 650;
 }

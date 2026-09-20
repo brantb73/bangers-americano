@@ -54,6 +54,7 @@ export function PlayScreen({
   const [noteDraft, setNoteDraft] = useState('')
   const [kcConfirm, setKcConfirm] = useState(false)
   const [kcSeed, setKcSeed] = useState<KingsCourtSeed>('standings')
+  const [showEarlier, setShowEarlier] = useState(false)
 
   const round = session.rounds[session.currentRoundIndex]
   if (!round) {
@@ -73,6 +74,40 @@ export function PlayScreen({
   const isKc = session.phase === 'kingsCourt'
   const switchCheck = canSwitchToKingsCourt(session)
   const kcCourts = isKc ? kingsCourtMatchCourts(session) : session.courts
+  const earlierRounds = session.rounds
+    .slice(0, ri)
+    .map((r, i) => ({ round: r, index: i }))
+    .filter(({ round }) => round.matches.some((m) => m.scoreA !== null && m.scoreB !== null))
+
+  function renderMatches(
+    round: (typeof session.rounds)[number],
+    roundIndex: number,
+    commentsEditable: boolean,
+  ) {
+    const roundIsKc = round.kind === 'kingsCourt'
+    const roundCourts = roundIsKc
+      ? Math.max(round.matches.length, 1)
+      : session.courts
+    return round.matches.map((m) => (
+      <ScoreEntry
+        key={m.id}
+        match={m}
+        players={session.players}
+        pointsToWin={session.pointsToWin}
+        winBy={winBy}
+        onSubmit={(a, b) => onSubmitScore(roundIndex, m.id, a, b)}
+        onSaveComment={(c) => onSaveComment(roundIndex, m.id, c)}
+        commentsEditable={commentsEditable}
+        scoresEditable
+        courtLabel={roundIsKc ? courtTitle(m.court) : undefined}
+        movementHint={roundIsKc ? courtMovementHint(m.court, roundCourts) : undefined}
+        resultMoveNote={
+          roundIsKc ? describeMatchMovement(m, roundCourts, session.players) : null
+        }
+        cardClassName={roundIsKc && m.court === 1 ? 'kings-court-card' : undefined}
+      />
+    ))
+  }
 
   return (
     <div className="screen play">
@@ -155,25 +190,42 @@ export function PlayScreen({
       />
 
       <div className="matches">
-        {round.matches.map((m) => (
-          <ScoreEntry
-            key={m.id}
-            match={m}
-            players={session.players}
-            pointsToWin={session.pointsToWin}
-            winBy={winBy}
-            onSubmit={(a, b) => onSubmitScore(ri, m.id, a, b)}
-            onSaveComment={(c) => onSaveComment(ri, m.id, c)}
-            commentsEditable
-            courtLabel={isKc ? courtTitle(m.court) : undefined}
-            movementHint={isKc ? courtMovementHint(m.court, kcCourts) : undefined}
-            resultMoveNote={
-              isKc ? describeMatchMovement(m, kcCourts, session.players) : null
-            }
-            cardClassName={isKc && m.court === 1 ? 'kings-court-card' : undefined}
-          />
-        ))}
+        {renderMatches(round, ri, true)}
       </div>
+
+      {earlierRounds.length > 0 && (
+        <section className="card earlier-rounds-card">
+          <button
+            type="button"
+            className="btn btn-ghost btn-block"
+            onClick={() => setShowEarlier((v) => !v)}
+            aria-expanded={showEarlier}
+          >
+            {showEarlier
+              ? 'Hide earlier rounds'
+              : `Edit earlier rounds (${earlierRounds.length})`}
+          </button>
+          {showEarlier && (
+            <div className="earlier-rounds">
+              <p className="hint">
+                Tap a score or <strong>Edit score</strong> to correct a court. Placement
+                always updates. King’s Court courts rebuild from the corrected round if
+                you haven’t scored the next ladder round yet.
+              </p>
+              {earlierRounds.map(({ round: past, index }) => (
+                <div key={past.number} className="earlier-round">
+                  <h3>
+                    {past.kind === 'kingsCourt'
+                      ? `King’s Court · Round ${past.number}`
+                      : `Round ${past.number}`}
+                  </h3>
+                  <div className="matches">{renderMatches(past, index, true)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="card round-note-card">
         {editingNote ? (

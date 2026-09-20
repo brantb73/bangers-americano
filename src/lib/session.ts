@@ -1,6 +1,13 @@
 import { createId } from './ids'
 import { generateKingsCourtRound } from './kingsCourt'
-import { isRoundComplete, recomputeScoresFromMatches } from './scoring'
+import {
+  applyScore,
+  editScore,
+  isMatchComplete,
+  isRoundComplete,
+  matchWinnerFlipped,
+  recomputeScoresFromMatches,
+} from './scoring'
 import {
   activePlayers,
   bumpSitOuts,
@@ -501,6 +508,94 @@ export function switchToKingsCourt(
   throw new Error('Finish or undo scores in this round first')
 }
 
+function lastCompletedKingsCourtIndex(session: Session): number {
+  for (let i = session.rounds.length - 1; i >= 0; i--) {
+    const round = session.rounds[i]!
+    if (round.kind !== 'kingsCourt') continue
+    if (isRoundComplete(session, i)) return i
+  }
+  return -1
+}
+
+/**
+ * After a score correction, rebuild the current King’s Court round when it
+ * still has no scores and still depends on the edited round:
+ * - later KC round, previous KC complete → movement from corrected winners/losers
+ * - first KC round, standings seed → re-seed from corrected Americano standings
+ *
+ * If the next KC round already has scores, pairings stay put (standings +
+ * differential still update via editScore). Random-seeded first KC is not reshuffled.
+ */
+function rebuildKingsCourtAfterScoreEdit(
+  session: Session,
+  editedRoundIndex: number,
+  winnerFlipped: boolean,
+): Session {
+  if (session.status !== 'active') return session
+  if (session.phase !== 'kingsCourt') return session
+
+  const idx = session.currentRoundIndex
+  if (editedRoundIndex >= idx) return session
+
+  const current = session.rounds[idx]
+  if (!current || current.kind !== 'kingsCourt') return session
+  if (currentRoundHasScores(session)) return session
+
+  const lastKc = lastCompletedKingsCourtIndex(session)
+  if (lastKc >= 0) {
+    if (editedRoundIndex !== lastKc || !winnerFlipped) return session
+    try {
+      return regenerateCurrentRound(session)
+    } catch {
+      return session
+    }
+  }
+
+  // First KC ladder: only re-seed from standings (random would reshuffle courts).
+  if (session.kingsCourtSeed === 'random') return session
+  try {
+    return regenerateCurrentRound(session)
+  } catch {
+    return session
+  }
+}
+
+/**
+ * Replace a scored match. Always recomputes wins / differential / standings.
+ * Rebuilds the current unscored King’s Court ladder from the corrected round
+ * when that round still drives placement (see rebuildKingsCourtAfterScoreEdit).
+ */
+export function editMatchScore(
+  session: Session,
+  roundIndex: number,
+  matchId: string,
+  scoreA: number,
+  scoreB: number,
+): Session {
+  const match = session.rounds[roundIndex]?.matches.find((m) => m.id === matchId)
+  if (!match || !isMatchComplete(match) || match.scoreA === null || match.scoreB === null) {
+    return editScore(session, roundIndex, matchId, scoreA, scoreB)
+  }
+  const winnerFlipped = matchWinnerFlipped(match.scoreA, match.scoreB, scoreA, scoreB)
+  const next = editScore(session, roundIndex, matchId, scoreA, scoreB)
+  if (next === session) return session
+  return rebuildKingsCourtAfterScoreEdit(next, roundIndex, winnerFlipped)
+}
+
+/** Enter a new score or replace an existing one for this court. */
+export function saveMatchScore(
+  session: Session,
+  roundIndex: number,
+  matchId: string,
+  scoreA: number,
+  scoreB: number,
+): Session {
+  const match = session.rounds[roundIndex]?.matches.find((m) => m.id === matchId)
+  if (match && isMatchComplete(match)) {
+    return editMatchScore(session, roundIndex, matchId, scoreA, scoreB)
+  }
+  return applyScore(session, roundIndex, matchId, scoreA, scoreB)
+}
 
 export function setMatchComment(
   session: Session,
