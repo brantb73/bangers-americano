@@ -64,14 +64,14 @@ export function SetupScreen({
     <div className="screen setup">
       <header className="hero">
         <BrandLogo size="large" />
-        <p className="tagline">Americano · rotating partners · cumulative points</p>
+        <p className="tagline">Americano · rotating partners · point differential</p>
       </header>
 
       <section className="card help-blurb">
         <p>
-          After each game, every player <strong>banks their team’s points</strong>. Live
-          standings rank by <strong>wins first</strong>, with points breaking ties — watch
-          placement move as rounds go on.
+          After each game, every player gets the <strong>point differential</strong> (win
+          11–5 → +6; lose → −6). Live standings rank by <strong>wins first</strong>, with
+          differential breaking ties — watch placement move as rounds go on.
         </p>
         <p>
           Optional hybrid night: start as an Americano mixer, then tap{' '}

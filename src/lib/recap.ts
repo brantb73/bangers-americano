@@ -1,5 +1,5 @@
 import { kingsCourtRoundCount, usedKingsCourt } from './kingsCourt'
-import { computeStandings, playerName } from './scoring'
+import { computeStandings, formatDifferential, playerName } from './scoring'
 import type { Match, Round, Session, Standing } from './types'
 
 function nameOf(session: Session, id: string): string {
@@ -97,11 +97,11 @@ export function generateSportsCenterRecap(session: Session): string {
   // Podcast cold open — conversational, not stiff TV
   if (hybrid) {
     lines.push(
-      `Hey, welcome back to the Bangers Highlight Reel — your unofficial Americano podcast where the partners rotate, the wins and points pile up, and nobody's ego is safe. Tonight we had ${session.players.length} players, ${session.courts} court${session.courts === 1 ? '' : 's'}, and ${roundsPlayed} round${roundsPlayed === 1 ? '' : 's'} that started as “who am I playing with again?” and finished as King’s Court — Court 1 is the throne, winners climb, losers slide, partners split. ${kcRounds} climb${kcRounds === 1 ? '' : 's'} up the ladder after the mixer.`,
+      `Hey, welcome back to the Bangers Highlight Reel — your unofficial Americano podcast where the partners rotate, the wins and plus-minus pile up, and nobody's ego is safe. Tonight we had ${session.players.length} players, ${session.courts} court${session.courts === 1 ? '' : 's'}, and ${roundsPlayed} round${roundsPlayed === 1 ? '' : 's'} that started as “who am I playing with again?” and finished as King’s Court — Court 1 is the throne, winners climb, losers slide, partners split. ${kcRounds} climb${kcRounds === 1 ? '' : 's'} up the ladder after the mixer.`,
     )
   } else {
     lines.push(
-      `Hey, welcome back to the Bangers Highlight Reel — your unofficial Americano podcast where the partners rotate, the wins and points pile up, and nobody's ego is safe. Tonight we had ${session.players.length} players, ${session.courts} court${session.courts === 1 ? '' : 's'}, and ${roundsPlayed} round${roundsPlayed === 1 ? '' : 's'} of “who am I playing with again?”`,
+      `Hey, welcome back to the Bangers Highlight Reel — your unofficial Americano podcast where the partners rotate, the wins and plus-minus pile up, and nobody's ego is safe. Tonight we had ${session.players.length} players, ${session.courts} court${session.courts === 1 ? '' : 's'}, and ${roundsPlayed} round${roundsPlayed === 1 ? '' : 's'} of “who am I playing with again?”`,
     )
   }
 
@@ -109,15 +109,15 @@ export function generateSportsCenterRecap(session: Session): string {
     const gap = runnerUp ? champion.points - runnerUp.points : champion.points
     if (gap >= 15) {
       lines.push(
-        `And let's not bury the lede: ${champion.name} ran away with it. ${champion.points} points. That's not winning — that's a public service announcement that the rest of you should've stayed home and practiced dinks.`,
+        `And let's not bury the lede: ${champion.name} ran away with it. ${formatDifferential(champion.points)} differential. That's not winning — that's a public service announcement that the rest of you should've stayed home and practiced dinks.`,
       )
     } else if (gap <= 2 && runnerUp) {
       lines.push(
-        `Photo finish energy. ${champion.name} sneaks past ${runnerUp.name}, ${champion.points} to ${runnerUp.points}. One more rally and we'd still be arguing about it in the group chat.`,
+        `Photo finish energy. ${champion.name} sneaks past ${runnerUp.name}, ${formatDifferential(champion.points)} to ${formatDifferential(runnerUp.points)}. One more rally and we'd still be arguing about it in the group chat.`,
       )
     } else {
       lines.push(
-        `Crown goes to ${champion.name} with ${champion.points} points. Not a runaway, not a miracle — just the person who stopped missing when it mattered. Congrats. The rest of you: noted.`,
+        `Crown goes to ${champion.name} with ${formatDifferential(champion.points)} differential. Not a runaway, not a miracle — just the person who stopped missing when it mattered. Congrats. The rest of you: noted.`,
       )
     }
   }
@@ -126,11 +126,11 @@ export function generateSportsCenterRecap(session: Session): string {
   if (standings.length >= 3) {
     const [a, b, c] = standings
     lines.push(
-      `Podium check: ${a!.name} in first with ${a!.points}. ${b!.name} second at ${b!.points} — so close, so painful. ${c!.name} third with ${c!.points}, which is the sports equivalent of “thanks for coming.”`,
+      `Podium check: ${a!.name} in first with ${formatDifferential(a!.points)}. ${b!.name} second at ${formatDifferential(b!.points)} — so close, so painful. ${c!.name} third with ${formatDifferential(c!.points)}, which is the sports equivalent of “thanks for coming.”`,
     )
   } else if (champion && runnerUp) {
     lines.push(
-      `Final tally: ${champion.name} ${champion.points}, ${runnerUp.name} ${runnerUp.points}. Someone's buying pickleballs. Someone's buying silence.`,
+      `Final tally: ${champion.name} ${formatDifferential(champion.points)}, ${runnerUp.name} ${formatDifferential(runnerUp.points)}. Someone's buying pickleballs. Someone's buying silence.`,
     )
   }
 
@@ -175,7 +175,7 @@ export function generateSportsCenterRecap(session: Session): string {
   }
   if (session.rounds.filter((r) => scoredMatches(r).length > 0).length > 4) {
     lines.push(
-      `And yes, there were more rounds after that. We truncated for your attention span. The points? Those kept stacking.`,
+      `And yes, there were more rounds after that. We truncated for your attention span. The plus-minus? That kept stacking.`,
     )
   }
 
@@ -199,12 +199,12 @@ export function generateSportsCenterRecap(session: Session): string {
   const leftEarly = standings.filter((s) => !s.active)
   if (leftEarly.length > 0) {
     lines.push(
-      `Also: ${leftEarly.map((s) => s.name).join(', ')} dipped early. Points still count. Ghosting the session doesn't ghost the leaderboard.`,
+      `Also: ${leftEarly.map((s) => s.name).join(', ')} dipped early. Differential still counts. Ghosting the session doesn't ghost the leaderboard.`,
     )
   }
   if (last && champion && last.playerId !== champion.playerId) {
     lines.push(
-      `And a moment of silence — well, half a moment — for ${last.name}, finishing with ${last.points} points. Participated enthusiastically. Different partner every round. Nowhere to hide. That's the sport.`,
+      `And a moment of silence — well, half a moment — for ${last.name}, finishing with ${formatDifferential(last.points)}. Participated enthusiastically. Different partner every round. Nowhere to hide. That's the sport.`,
     )
   }
 
@@ -212,11 +212,11 @@ export function generateSportsCenterRecap(session: Session): string {
     if (hybrid) {
       const kc = champion.kingsCourtWins
       lines.push(
-        `${champion.name} takes the Bangers hybrid — Americano miles plus a King’s Court finish. ${champion.gamesWon} wins in the book${kc > 0 ? ` (${kc} of them on the throne climb)` : ''}, ${champion.points} points on the board. Rank is still wins first, then points. Wear it proudly. Or smugly. We won't judge. Much.`,
+        `${champion.name} takes the Bangers hybrid — Americano miles plus a King’s Court finish. ${champion.gamesWon} wins in the book${kc > 0 ? ` (${kc} of them on the throne climb)` : ''}, ${formatDifferential(champion.points)} on the board. Rank is still wins first, then differential. Wear it proudly. Or smugly. We won't judge. Much.`,
       )
     } else {
       lines.push(
-        `${champion.name} takes the Bangers Americano. ${champion.gamesWon} wins in the book, ${champion.points} points on the board. Wear it proudly. Or smugly. We won't judge. Much.`,
+        `${champion.name} takes the Bangers Americano. ${champion.gamesWon} wins in the book, ${formatDifferential(champion.points)} on the board. Wear it proudly. Or smugly. We won't judge. Much.`,
       )
     }
   }

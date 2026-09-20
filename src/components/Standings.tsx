@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { usedKingsCourt } from '../lib/kingsCourt'
-import { computeStandings } from '../lib/scoring'
+import { computeStandings, formatDifferential } from '../lib/scoring'
 import type { Session, Standing } from '../lib/types'
 
 interface Props {
@@ -62,10 +62,15 @@ export function Standings({
   return (
     <div className={compact ? 'standings compact' : 'standings'}>
       <h2>{compact ? 'Live placement' : 'Final placement'}</h2>
+      {compact && (
+        <p className="hint standings-explain">
+          Ranked by wins, then +/− differential.
+        </p>
+      )}
       {!compact && (
         <p className="hint standings-explain">
-          Ranked by <strong>games won</strong>, then total points banked (team score each
-          game). Further ties: games played, then name.
+          Ranked by <strong>games won</strong>, then <strong>point differential</strong>{' '}
+          (+/−). Win 11–5 → +6; lose 11–5 → −6. Further ties: games played, then name.
           {showKc
             ? ' King’s Court wins are listed separately; they already count in games won.'
             : ''}
@@ -104,7 +109,13 @@ export function Standings({
                     {delta > 0 ? `↑${delta}` : `↓${Math.abs(delta)}`}
                   </span>
                 )}
-                <span className="pts">{r.points}</span>
+                <span
+                  className={`pts${r.points < 0 ? ' neg' : r.points > 0 ? ' pos' : ''}`}
+                  title="Point differential"
+                  aria-label={`Differential ${formatDifferential(r.points)}`}
+                >
+                  {formatDifferential(r.points)}
+                </span>
               </span>
               <span className="meta">
                 {r.gamesPlayed}g · {r.gamesWon}w

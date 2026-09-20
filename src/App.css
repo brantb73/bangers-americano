@@ -367,6 +367,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+.pts.neg,
+.roster-pts.neg {
+  color: var(--warn);
+}
+
 @media (min-width: 600px) {
   .app-shell {
     padding-top: 24px;

@@ -15,7 +15,68 @@ export function scoringRuleSummary(pointsToWin: number, winBy: WinBy): string {
   return `First to ${pointsToWin}, win by ${winBy}`
 }
 
-/** Apply a completed score: each player banks their team's points (Americano). */
+/** Point differential for a finished match: A gets A−B, B gets B−A. */
+export function matchPointDifferentials(
+  scoreA: number,
+  scoreB: number,
+): { deltaA: number; deltaB: number } {
+  return { deltaA: scoreA - scoreB, deltaB: scoreB - scoreA }
+}
+
+/** Per-player differential deltas for a match (same value for both teammates). */
+export function playerDeltasForMatch(
+  teamA: readonly string[],
+  teamB: readonly string[],
+  scoreA: number,
+  scoreB: number,
+): Record<string, number> {
+  const { deltaA, deltaB } = matchPointDifferentials(scoreA, scoreB)
+  const deltas: Record<string, number> = {}
+  for (const id of teamA) deltas[id] = deltaA
+  for (const id of teamB) deltas[id] = deltaB
+  return deltas
+}
+
+/** Display differential with a sign so negatives stay obvious (+6, −6, 0). */
+export function formatDifferential(n: number): string {
+  if (n > 0) return `+${n}`
+  return String(n)
+}
+
+/**
+ * Rebuild running differentials from stored match scores.
+ * Migrates old sessions that banked team totals instead of A−B / B−A.
+ */
+export function recomputeScoresFromMatches(session: Session): Session {
+  const scores: Record<string, number> = {}
+  for (const p of session.players) scores[p.id] = 0
+  for (const id of Object.keys(session.scores ?? {})) {
+    if (!(id in scores)) scores[id] = 0
+  }
+
+  for (const round of session.rounds) {
+    for (const m of round.matches) {
+      if (!isMatchComplete(m) || m.scoreA === null || m.scoreB === null) continue
+      const deltas = playerDeltasForMatch(m.teamA, m.teamB, m.scoreA, m.scoreB)
+      for (const [id, diff] of Object.entries(deltas)) {
+        scores[id] = (scores[id] ?? 0) + diff
+      }
+    }
+  }
+
+  const scoreLog = session.scoreLog.map((entry) => {
+    const match = session.rounds[entry.roundIndex]?.matches.find((m) => m.id === entry.matchId)
+    if (!match) return entry
+    return {
+      ...entry,
+      deltas: playerDeltasForMatch(match.teamA, match.teamB, entry.scoreA, entry.scoreB),
+    }
+  })
+
+  return { ...session, scores, scoreLog }
+}
+
+/** Apply a completed score: each player gets their team's point differential. */
 export function applyScore(
   session: Session,
   roundIndex: number,
@@ -35,13 +96,11 @@ export function applyScore(
     throw new Error('Match already scored — undo first')
   }
 
-  const deltas: Record<string, number> = {}
-  for (const id of match.teamA) deltas[id] = scoreA
-  for (const id of match.teamB) deltas[id] = scoreB
+  const deltas = playerDeltasForMatch(match.teamA, match.teamB, scoreA, scoreB)
 
   const scores = { ...session.scores }
-  for (const [id, pts] of Object.entries(deltas)) {
-    scores[id] = (scores[id] ?? 0) + pts
+  for (const [id, diff] of Object.entries(deltas)) {
+    scores[id] = (scores[id] ?? 0) + diff
   }
 
   const matches = round.matches.map((m) =>
@@ -73,8 +132,8 @@ export function undoLastScore(session: Session): Session {
   const log = [...session.scoreLog]
   const entry = log.pop()!
   const scores = { ...session.scores }
-  for (const [id, pts] of Object.entries(entry.deltas)) {
-    scores[id] = (scores[id] ?? 0) - pts
+  for (const [id, diff] of Object.entries(entry.deltas)) {
+    scores[id] = (scores[id] ?? 0) - diff
   }
 
   const rounds = session.rounds.map((r, i) => {
@@ -136,7 +195,7 @@ export function kingsCourtWins(session: Session, playerId: string): number {
 }
 
 function compareStandings(a: Standing, b: Standing): number {
-  // Wins first, then points, then games played, then name
+  // Wins first, then point differential, then games played, then name
   if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon
   if (b.points !== a.points) return b.points - a.points
   if (b.gamesPlayed !== a.gamesPlayed) return b.gamesPlayed - a.gamesPlayed
@@ -163,7 +222,7 @@ export function computeStandings(session: Session): Standing[] {
     if (i > 0) {
       const prev = rows[i - 1]!
       const cur = rows[i]!
-      // Shared rank only when wins and points match
+      // Shared rank only when wins and differential match
       if (prev.gamesWon !== cur.gamesWon || prev.points !== cur.points) {
         rank = i + 1
       }
@@ -223,7 +282,7 @@ export function validateScoreInput(
 /**
  * Sudden death / end-game-now: accept any early finish with a clear winner.
  * Blocks ties. Does not require reaching game-to or win-by margin.
- * Both teams still bank their points the usual Americano way via applyScore.
+ * Both teams still get the usual point differential via applyScore.
  */
 export function validateSuddenDeathScore(scoreA: number, scoreB: number): string | null {
   if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB)) {

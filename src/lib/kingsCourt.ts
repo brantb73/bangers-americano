@@ -168,6 +168,7 @@ export function nextCourtGroups(matches: Match[]): CourtGroups[] {
 }
 
 /** Active players ordered for the first King’s Court ladder. */
+/** Active players in standings order (wins, then differential). */
 export function seedPlayersFromStandings(session: Session): Player[] {
   const byId = new Map(session.players.map((p) => [p.id, p]))
   return computeStandings(session)

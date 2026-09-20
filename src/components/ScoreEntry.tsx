@@ -109,7 +109,7 @@ export function ScoreEntry({
     if (!confirmSudden) {
       setConfirmSudden(true)
       setError(
-        `End game now at ${scoreA}–${scoreB}? Sudden death needs a winner (no ties). Both teams still bank their points.`,
+        `End game now at ${scoreA}–${scoreB}? Sudden death needs a winner (no ties). Differential is still the score gap (e.g. 6–5 → +1 / −1).`,
       )
       return
     }
@@ -262,7 +262,8 @@ export function ScoreEntry({
       </button>
       {!confirmSudden && (
         <p className="hint sudden-hint">
-          Early finish (e.g. 5–6): needs a winner, no ties. Both sides still bank points.
+          Early finish (e.g. 5–6): needs a winner, no ties. Differential is the score gap
+          (6–5 → +1 / −1).
         </p>
       )}
     </div>

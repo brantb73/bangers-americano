@@ -8,10 +8,11 @@ import {
   HISTORY_STORAGE_KEY,
   loadHistory,
   localDateKey,
+  normalizeHistoryEntry,
   rematchFromHistory,
 } from './history'
 import { applyScore } from './scoring'
-import { createEmptySession, startSession, STORAGE_KEY } from './session'
+import { advanceToNextRound, createEmptySession, startSession, STORAGE_KEY } from './session'
 import type { Player, Session } from './types'
 
 function makeFinishedSession(n = 4): Session {
@@ -69,7 +70,7 @@ describe('archiveSession', () => {
     expect(entry.pointsToWin).toBe(11)
     expect(entry.winBy).toBe(2)
     expect(entry.standings.length).toBe(4)
-    expect(entry.standings[0]!.points).toBe(11)
+    expect(entry.standings[0]!.points).toBe(4)
     expect(entry.session.status).toBe('finished')
     expect(entry.session.scores).toEqual(session.scores)
 
@@ -100,19 +101,50 @@ describe('archiveSession', () => {
     const first = archiveSession(session, new Date(2026, 8, 13, 10, 0, 0))
     expect(loadHistory()).toHaveLength(1)
 
-    // Simulate continue + more scoring conceptually: bump a score and re-archive
-    const topId = session.players[0]!.id
-    session = {
-      ...session,
-      scores: { ...session.scores, [topId]: (session.scores[topId] ?? 0) + 5 },
-      status: 'finished',
-    }
+    session = advanceToNextRound({ ...session, status: 'active' })
+    const nextMatch = session.rounds[1]!.matches[0]!
+    session = applyScore(session, 1, nextMatch.id, 11, 5)
+    session = { ...session, status: 'finished' }
     const second = archiveSession(session, new Date(2026, 8, 13, 16, 0, 0))
 
     const hist = loadHistory()
     expect(hist).toHaveLength(1)
     expect(second.id).toBe(first.id)
-    expect(hist[0]!.session.scores[topId]).toBe(session.scores[topId])
+    expect(hist[0]!.session.rounds).toHaveLength(2)
+    expect(hist[0]!.session.scores).toEqual(session.scores)
+  })
+
+  it('recomputes old banked-points standings from match scores on load', () => {
+    const session = makeFinishedSession()
+    const match = session.rounds[0]!.matches[0]!
+    const stale: Session = {
+      ...session,
+      scores: Object.fromEntries(
+        session.players.map((p) => [
+          p.id,
+          match.teamA.includes(p.id) ? 11 : match.teamB.includes(p.id) ? 7 : 0,
+        ]),
+      ),
+    }
+    const raw = {
+      id: 'hist-old',
+      dateKey: '2026-09-13',
+      label: 'Sep 13 · 2:30 PM',
+      endedAt: new Date(2026, 8, 13, 14, 30, 0).toISOString(),
+      playerCount: 4,
+      courts: 1,
+      pointsToWin: 11,
+      winBy: 2 as const,
+      standings: [
+        { playerId: match.teamA[0], name: 'P?', points: 11, rank: 1, gamesPlayed: 1, gamesWon: 1 },
+      ],
+      session: stale,
+    }
+    const migrated = normalizeHistoryEntry(raw)
+    expect(migrated.session.scores[match.teamA[0]]).toBe(4)
+    expect(migrated.session.scores[match.teamB[0]]).toBe(-4)
+    expect(migrated.standings[0]!.points).toBe(4)
+    expect(migrated.standings.find((s) => s.playerId === match.teamB[0])!.points).toBe(-4)
   })
 })
 

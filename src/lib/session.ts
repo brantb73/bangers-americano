@@ -1,6 +1,6 @@
 import { createId } from './ids'
 import { generateKingsCourtRound } from './kingsCourt'
-import { isRoundComplete } from './scoring'
+import { isRoundComplete, recomputeScoresFromMatches } from './scoring'
 import {
   activePlayers,
   bumpSitOuts,
@@ -56,7 +56,7 @@ export function isDuplicateName(
 }
 
 /**
- * Fix a misspelled name. Keeps player id stable so scores/standings stay tied.
+ * Fix a misspelled name. Keeps player id stable so differentials/standings stay tied.
  * Rejects empty names. Works in setup and active sessions (and finished for history edits if needed).
  */
 export function renamePlayer(
@@ -249,7 +249,7 @@ export function addPlayer(session: Session, name: string): RosterChangeResult {
 }
 
 /**
- * Mark a player as left during an active session (keeps points on standings).
+ * Mark a player as left during an active session (keeps differential on standings).
  * If current round has any scores → block.
  * If no scores → mark inactive and regenerate current round.
  */
@@ -575,7 +575,7 @@ export function normalizeSession(parsed: Session): Session {
     ...r,
     kind: r.kind === 'kingsCourt' ? ('kingsCourt' as const) : r.kind === 'americano' ? ('americano' as const) : undefined,
   }))
-  return {
+  const normalized: Session = {
     ...parsed,
     winBy,
     pointsToWin,
@@ -594,6 +594,8 @@ export function normalizeSession(parsed: Session): Session {
     status: parsed.status === 'active' || parsed.status === 'finished' ? parsed.status : 'setup',
     recapScript: typeof parsed.recapScript === 'string' ? parsed.recapScript : undefined,
   }
+  // Rebuild differentials from match scores so old “banked points” sessions migrate.
+  return recomputeScoresFromMatches(normalized)
 }
 
 export function saveSession(session: Session): void {
