@@ -76,6 +76,12 @@ export function recomputeScoresFromMatches(session: Session): Session {
   return { ...session, scores, scoreLog }
 }
 
+function assertNonNegativeIntegerScores(scoreA: number, scoreB: number): void {
+  if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0) {
+    throw new Error('Scores must be non-negative integers')
+  }
+}
+
 /** Apply a completed score: each player gets their team's point differential. */
 export function applyScore(
   session: Session,
@@ -84,9 +90,7 @@ export function applyScore(
   scoreA: number,
   scoreB: number,
 ): Session {
-  if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0) {
-    throw new Error('Scores must be non-negative integers')
-  }
+  assertNonNegativeIntegerScores(scoreA, scoreB)
 
   const round = session.rounds[roundIndex]
   if (!round) throw new Error('Round not found')
@@ -123,6 +127,77 @@ export function applyScore(
     // (after a score) stay pending for the following round.
     sitRequests: firstScoreInRound ? { sit: [], play: [] } : session.sitRequests,
   }
+}
+
+/**
+ * Replace a scored match’s result. Recomputes differentials and score-log deltas.
+ * Does not clear the match (unlike undo). King’s Court court rebuild — when the
+ * next ladder round is still unscored — is handled by `editMatchScore` in session.ts.
+ */
+export function editScore(
+  session: Session,
+  roundIndex: number,
+  matchId: string,
+  scoreA: number,
+  scoreB: number,
+): Session {
+  assertNonNegativeIntegerScores(scoreA, scoreB)
+
+  const round = session.rounds[roundIndex]
+  if (!round) throw new Error('Round not found')
+  const match = round.matches.find((m) => m.id === matchId)
+  if (!match) throw new Error('Match not found')
+  if (!isMatchComplete(match) || match.scoreA === null || match.scoreB === null) {
+    throw new Error('Match has no score to edit')
+  }
+  if (match.scoreA === scoreA && match.scoreB === scoreB) {
+    return session
+  }
+
+  const rounds = session.rounds.map((r, i) => {
+    if (i !== roundIndex) return r
+    return {
+      ...r,
+      matches: r.matches.map((m) =>
+        m.id === matchId ? { ...m, scoreA, scoreB } : m,
+      ),
+    }
+  })
+
+  const logIndex = session.scoreLog.findIndex(
+    (entry) => entry.roundIndex === roundIndex && entry.matchId === matchId,
+  )
+  let scoreLog = session.scoreLog
+  if (logIndex >= 0) {
+    scoreLog = session.scoreLog.map((entry, i) =>
+      i === logIndex ? { ...entry, scoreA, scoreB } : entry,
+    )
+  } else {
+    scoreLog = [
+      ...session.scoreLog,
+      {
+        roundIndex,
+        matchId,
+        scoreA,
+        scoreB,
+        deltas: playerDeltasForMatch(match.teamA, match.teamB, scoreA, scoreB),
+      },
+    ]
+  }
+
+  return recomputeScoresFromMatches({ ...session, rounds, scoreLog })
+}
+
+/** True when A vs B winner flipped (used to decide King’s Court movement rebuild). */
+export function matchWinnerFlipped(
+  prevA: number,
+  prevB: number,
+  nextA: number,
+  nextB: number,
+): boolean {
+  const prevWinner = prevA === prevB ? 'tie' : prevA > prevB ? 'A' : 'B'
+  const nextWinner = nextA === nextB ? 'tie' : nextA > nextB ? 'A' : 'B'
+  return prevWinner !== nextWinner
 }
 
 /** Undo the most recently entered score. */

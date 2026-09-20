@@ -15,6 +15,8 @@ interface Props {
   onSaveComment?: (comment: string) => void
   /** Allow editing comments (active session or history) */
   commentsEditable?: boolean
+  /** Allow correcting a saved score. Default true. */
+  scoresEditable?: boolean
   /** Override default “Court N” label (e.g. Court 1 · King’s). */
   courtLabel?: string
   /** Who moves where after this game. */
@@ -33,6 +35,7 @@ export function ScoreEntry({
   onSubmit,
   onSaveComment,
   commentsEditable = true,
+  scoresEditable = true,
   courtLabel,
   movementHint,
   resultMoveNote,
@@ -44,9 +47,11 @@ export function ScoreEntry({
   const [confirmSudden, setConfirmSudden] = useState(false)
   const [editingComment, setEditingComment] = useState(false)
   const [draft, setDraft] = useState(match.comment ?? '')
+  const [editingScore, setEditingScore] = useState(false)
 
   const done = match.scoreA !== null && match.scoreB !== null
   const hasComment = Boolean(match.comment?.trim())
+  const showForm = !done || editingScore
 
   function parseScores(): { scoreA: number; scoreB: number } | null {
     const scoreA = Number(a)
@@ -62,6 +67,13 @@ export function ScoreEntry({
       return null
     }
     return { scoreA, scoreB }
+  }
+
+  function finishSubmit(scoreA: number, scoreB: number) {
+    setError(null)
+    setConfirmSudden(false)
+    setEditingScore(false)
+    onSubmit(scoreA, scoreB)
   }
 
   function trySubmit() {
@@ -81,9 +93,7 @@ export function ScoreEntry({
       setConfirmSudden(false)
       return
     }
-    setError(null)
-    setConfirmSudden(false)
-    onSubmit(scoreA, scoreB)
+    finishSubmit(scoreA, scoreB)
   }
 
   function trySuddenDeath() {
@@ -100,9 +110,7 @@ export function ScoreEntry({
 
     // If the score already passes normal rules, just save — no need for sudden death
     if (validateScoreInput(scoreA, scoreB, pointsToWin, winBy) === null) {
-      setError(null)
-      setConfirmSudden(false)
-      onSubmit(scoreA, scoreB)
+      finishSubmit(scoreA, scoreB)
       return
     }
 
@@ -114,9 +122,7 @@ export function ScoreEntry({
       return
     }
 
-    setError(null)
-    setConfirmSudden(false)
-    onSubmit(scoreA, scoreB)
+    finishSubmit(scoreA, scoreB)
   }
 
   function onScoreChange(which: 'a' | 'b', raw: string) {
@@ -127,90 +133,29 @@ export function ScoreEntry({
     setConfirmSudden(false)
   }
 
+  function startEditScore() {
+    setA(String(match.scoreA ?? ''))
+    setB(String(match.scoreB ?? ''))
+    setError(null)
+    setConfirmSudden(false)
+    setEditingComment(false)
+    setEditingScore(true)
+  }
+
+  function cancelEditScore() {
+    setError(null)
+    setConfirmSudden(false)
+    setEditingScore(false)
+  }
+
   function saveComment() {
     onSaveComment?.(draft)
     setEditingComment(false)
   }
 
-  if (done) {
-    return (
-      <div className={`match-card scored ${cardClassName ?? ''}`.trim()}>
-        <div className="court-label">
-          {courtLabel ?? `Court ${match.court}`}
-          {hasComment && !editingComment && (
-            <span className="comment-indicator" title={match.comment}>
-              💬
-            </span>
-          )}
-        </div>
-        <div className="score-result">
-          <div className="team">
-            <div>{playerName(players, match.teamA[0])}</div>
-            <div>{playerName(players, match.teamA[1])}</div>
-          </div>
-          <div className="score-big">
-            {match.scoreA} – {match.scoreB}
-          </div>
-          <div className="team">
-            <div>{playerName(players, match.teamB[0])}</div>
-            <div>{playerName(players, match.teamB[1])}</div>
-          </div>
-        </div>
-        {resultMoveNote ? <p className="move-note">{resultMoveNote}</p> : null}
-        {hasComment && !editingComment && (
-          <p className="match-comment-preview">“{match.comment}”</p>
-        )}
-
-        {commentsEditable && onSaveComment && (
-          <>
-            {editingComment ? (
-              <div className="comment-editor">
-                <textarea
-                  className="input comment-textarea"
-                  rows={3}
-                  maxLength={280}
-                  placeholder="Courtside comment…"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  autoFocus
-                />
-                <div className="comment-actions">
-                  <button type="button" className="btn btn-primary btn-sm" onClick={saveComment}>
-                    Save comment
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => {
-                      setDraft(match.comment ?? '')
-                      setEditingComment(false)
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm btn-block"
-                onClick={() => {
-                  setDraft(match.comment ?? '')
-                  setEditingComment(true)
-                }}
-              >
-                {hasComment ? 'Edit comment' : 'Add comment'}
-              </button>
-            )}
-          </>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <div className={`match-card ${cardClassName ?? ''}`.trim()}>
-      <div className="court-label">{courtLabel ?? `Court ${match.court}`}</div>
+  const form = (
+    <>
+      {editingScore ? <p className="hint score-edit-hint">Correct this court’s score</p> : null}
       {movementHint ? <p className="movement-hint">{movementHint}</p> : null}
       <div className="score-entry-grid">
         <div className="team-col">
@@ -226,6 +171,7 @@ export function ScoreEntry({
             value={a}
             onChange={(e) => onScoreChange('a', e.target.value)}
             aria-label="Team A score"
+            autoFocus={editingScore}
           />
         </div>
         <div className="vs">vs</div>
@@ -250,7 +196,7 @@ export function ScoreEntry({
           {error}
         </p>
       )}
-      <button type="button" className="btn btn-primary btn-block" onClick={trySubmit}>
+      <button type="button" className="btn btn-primary btn-block btn-lg" onClick={trySubmit}>
         Save score
       </button>
       <button
@@ -260,11 +206,116 @@ export function ScoreEntry({
       >
         {confirmSudden ? 'Confirm sudden death' : 'Sudden death — end game now'}
       </button>
+      {editingScore && (
+        <button type="button" className="btn btn-ghost btn-block" onClick={cancelEditScore}>
+          Cancel
+        </button>
+      )}
       {!confirmSudden && (
         <p className="hint sudden-hint">
           Early finish (e.g. 5–6): needs a winner, no ties. Differential is the score gap
           (6–5 → +1 / −1).
         </p>
+      )}
+    </>
+  )
+
+  if (showForm) {
+    return (
+      <div className={`match-card ${editingScore ? 'editing' : ''} ${cardClassName ?? ''}`.trim()}>
+        <div className="court-label">{courtLabel ?? `Court ${match.court}`}</div>
+        {form}
+      </div>
+    )
+  }
+
+  return (
+    <div className={`match-card scored ${cardClassName ?? ''}`.trim()}>
+      <div className="court-label">
+        {courtLabel ?? `Court ${match.court}`}
+        {hasComment && !editingComment && (
+          <span className="comment-indicator" title={match.comment}>
+            💬
+          </span>
+        )}
+      </div>
+      <div className="score-result">
+        <div className="team">
+          <div>{playerName(players, match.teamA[0])}</div>
+          <div>{playerName(players, match.teamA[1])}</div>
+        </div>
+        {scoresEditable ? (
+          <button
+            type="button"
+            className="score-big score-edit-tap"
+            onClick={startEditScore}
+            aria-label={`Edit score ${match.scoreA} to ${match.scoreB}`}
+          >
+            {match.scoreA} – {match.scoreB}
+          </button>
+        ) : (
+          <div className="score-big">
+            {match.scoreA} – {match.scoreB}
+          </div>
+        )}
+        <div className="team">
+          <div>{playerName(players, match.teamB[0])}</div>
+          <div>{playerName(players, match.teamB[1])}</div>
+        </div>
+      </div>
+      {resultMoveNote ? <p className="move-note">{resultMoveNote}</p> : null}
+      {hasComment && !editingComment && (
+        <p className="match-comment-preview">“{match.comment}”</p>
+      )}
+
+      {scoresEditable && (
+        <button type="button" className="btn btn-secondary btn-block" onClick={startEditScore}>
+          Edit score
+        </button>
+      )}
+
+      {commentsEditable && onSaveComment && (
+        <>
+          {editingComment ? (
+            <div className="comment-editor">
+              <textarea
+                className="input comment-textarea"
+                rows={3}
+                maxLength={280}
+                placeholder="Courtside comment…"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                autoFocus
+              />
+              <div className="comment-actions">
+                <button type="button" className="btn btn-primary btn-sm" onClick={saveComment}>
+                  Save comment
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    setDraft(match.comment ?? '')
+                    setEditingComment(false)
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm btn-block"
+              onClick={() => {
+                setDraft(match.comment ?? '')
+                setEditingComment(true)
+              }}
+            >
+              {hasComment ? 'Edit comment' : 'Add comment'}
+            </button>
+          )}
+        </>
       )}
     </div>
   )

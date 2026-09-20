@@ -30,7 +30,7 @@ export function Standings({
   const prevRanks = useRef<Record<string, number>>({})
   const [deltas, setDeltas] = useState<Record<string, number>>({})
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set())
-  const standingsKey = `${session.scoreLog.length}:${session.currentRoundIndex}:${session.players.map((p) => `${p.id}:${p.active !== false}`).join(',')}`
+  const standingsKey = `${session.scoreLog.length}:${session.currentRoundIndex}:${JSON.stringify(session.scores)}:${session.players.map((p) => `${p.id}:${p.active !== false}`).join(',')}`
 
   useEffect(() => {
     const nextRows: Standing[] = computeStandings(session)

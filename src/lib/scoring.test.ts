@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   applyScore,
   computeStandings,
+  editScore,
   formatDifferential,
   isRoundComplete,
   isValidFinishedScore,
   isValidSuddenDeathScore,
   matchPointDifferentials,
+  matchWinnerFlipped,
   recomputeScoresFromMatches,
   scoringRuleSummary,
   undoLastScore,
@@ -63,6 +65,84 @@ describe('applyScore / point differential', () => {
     const match = session.rounds[0]!.matches[0]!
     session = applyScore(session, 0, match.id, 11, 5)
     expect(() => applyScore(session, 0, match.id, 10, 8)).toThrow()
+  })
+})
+
+describe('editScore / correct a court', () => {
+  it('replaces the result and updates differentials and standings', () => {
+    let session = makeSession()
+    const match = session.rounds[0]!.matches[0]!
+    session = applyScore(session, 0, match.id, 11, 5)
+
+    expect(session.scores[match.teamA[0]]).toBe(6)
+    expect(session.scores[match.teamB[0]]).toBe(-6)
+
+    session = editScore(session, 0, match.id, 8, 11)
+
+    expect(session.rounds[0]!.matches[0]!.scoreA).toBe(8)
+    expect(session.rounds[0]!.matches[0]!.scoreB).toBe(11)
+    expect(session.scores[match.teamA[0]]).toBe(-3)
+    expect(session.scores[match.teamA[1]]).toBe(-3)
+    expect(session.scores[match.teamB[0]]).toBe(3)
+    expect(session.scores[match.teamB[1]]).toBe(3)
+    expect(session.scoreLog[0]!.scoreA).toBe(8)
+    expect(session.scoreLog[0]!.scoreB).toBe(11)
+    expect(session.scoreLog[0]!.deltas[match.teamA[0]]).toBe(-3)
+    expect(session.scoreLog[0]!.deltas[match.teamB[0]]).toBe(3)
+
+    const standings = computeStandings(session)
+    const newWinners = standings.filter((s) => match.teamB.includes(s.playerId))
+    const newLosers = standings.filter((s) => match.teamA.includes(s.playerId))
+    expect(newWinners.every((s) => s.gamesWon === 1 && s.points === 3)).toBe(true)
+    expect(newLosers.every((s) => s.gamesWon === 0 && s.points === -3)).toBe(true)
+    expect(newWinners[0]!.rank).toBe(1)
+    expect(newLosers[0]!.rank).toBeGreaterThan(1)
+  })
+
+  it('keeps other courts’ differentials when one court is edited', () => {
+    let session = makeSession()
+    const m0 = session.rounds[0]!.matches[0]!
+    const m1 = session.rounds[0]!.matches[1]!
+    session = applyScore(session, 0, m0.id, 11, 5)
+    session = applyScore(session, 0, m1.id, 11, 9)
+    session = editScore(session, 0, m0.id, 11, 3)
+
+    expect(session.scores[m0.teamA[0]]).toBe(8)
+    expect(session.scores[m0.teamB[0]]).toBe(-8)
+    expect(session.scores[m1.teamA[0]]).toBe(2)
+    expect(session.scores[m1.teamB[0]]).toBe(-2)
+  })
+
+  it('is a no-op when the scores are unchanged', () => {
+    let session = makeSession()
+    const match = session.rounds[0]!.matches[0]!
+    session = applyScore(session, 0, match.id, 11, 5)
+    const after = editScore(session, 0, match.id, 11, 5)
+    expect(after).toBe(session)
+  })
+
+  it('rejects editing a court that has not been scored', () => {
+    const session = makeSession()
+    const match = session.rounds[0]!.matches[0]!
+    expect(() => editScore(session, 0, match.id, 11, 5)).toThrow(/no score to edit/)
+  })
+
+  it('leaves undo able to clear the edited match', () => {
+    let session = makeSession()
+    const match = session.rounds[0]!.matches[0]!
+    session = applyScore(session, 0, match.id, 11, 5)
+    session = editScore(session, 0, match.id, 11, 7)
+    session = undoLastScore(session)
+    expect(session.rounds[0]!.matches[0]!.scoreA).toBeNull()
+    expect(session.scores[match.teamA[0]]).toBe(0)
+    expect(session.scores[match.teamB[0]]).toBe(0)
+  })
+})
+
+describe('matchWinnerFlipped', () => {
+  it('detects a winner change and ignores margin-only edits', () => {
+    expect(matchWinnerFlipped(11, 5, 5, 11)).toBe(true)
+    expect(matchWinnerFlipped(11, 5, 11, 7)).toBe(false)
   })
 })
 

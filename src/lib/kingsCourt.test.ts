@@ -13,7 +13,10 @@ import {
 } from './kingsCourt'
 import { applyScore, computeStandings } from './scoring'
 import {
+  advanceToNextRound,
   createEmptySession,
+  editMatchScore,
+  saveMatchScore,
   startSession,
   switchToKingsCourt,
 } from './session'
@@ -324,5 +327,107 @@ describe('labels', () => {
     )
     expect(note).toMatch(/stay on King’s/)
     expect(note).toMatch(/Court 2/)
+  })
+})
+
+describe('editMatchScore / King’s Court placement', () => {
+  it('next KC round uses corrected winners when still on the edited round', () => {
+    let session = americanoSession(8, 2)
+    session = switchToKingsCourt(session, 'standings')
+    const c1 = session.rounds[0]!.matches.find((m) => m.court === 1)!
+    const c2 = session.rounds[0]!.matches.find((m) => m.court === 2)!
+    session = applyScore(session, 0, c1.id, 11, 5)
+    session = applyScore(session, 0, c2.id, 11, 7)
+
+    session = editMatchScore(session, 0, c1.id, 5, 11)
+
+    const { winners: w1, losers: l1 } = matchWinnersLosers(
+      session.rounds[0]!.matches.find((m) => m.court === 1)!,
+    )
+    const { winners: w2 } = matchWinnersLosers(
+      session.rounds[0]!.matches.find((m) => m.court === 2)!,
+    )
+    expect(w1).toEqual(c1.teamB)
+    expect(l1).toEqual(c1.teamA)
+
+    const next = generateKingsCourtRound(session)
+    const n1 = next.matches.find((m) => m.court === 1)!
+    const kings = [...n1.teamA, ...n1.teamB]
+    expect(new Set(kings)).toEqual(new Set([...w1, ...w2]))
+  })
+
+  it('rebuilds the unscored next KC round from corrected movement', () => {
+    let session = americanoSession(8, 2)
+    session = switchToKingsCourt(session, 'standings')
+    const c1 = session.rounds[0]!.matches.find((m) => m.court === 1)!
+    const c2 = session.rounds[0]!.matches.find((m) => m.court === 2)!
+    session = applyScore(session, 0, c1.id, 11, 5)
+    session = applyScore(session, 0, c2.id, 11, 7)
+    session = advanceToNextRound(session)
+
+    const beforeKings = session.rounds[1]!.matches.find((m) => m.court === 1)!
+    const beforeIds = new Set([...beforeKings.teamA, ...beforeKings.teamB])
+    expect(beforeIds).toEqual(new Set([...c1.teamA, ...c2.teamA]))
+
+    session = editMatchScore(session, 0, c1.id, 4, 11)
+
+    const afterKings = session.rounds[1]!.matches.find((m) => m.court === 1)!
+    const afterIds = new Set([...afterKings.teamA, ...afterKings.teamB])
+    expect(afterIds).toEqual(new Set([...c1.teamB, ...c2.teamA]))
+    expect(session.rounds[1]!.matches.every((m) => m.scoreA === null)).toBe(true)
+  })
+
+  it('does not rewind pairings when the next KC round already has scores', () => {
+    let session = americanoSession(8, 2)
+    session = switchToKingsCourt(session, 'standings')
+    const r0c1 = session.rounds[0]!.matches.find((m) => m.court === 1)!
+    const r0c2 = session.rounds[0]!.matches.find((m) => m.court === 2)!
+    session = applyScore(session, 0, r0c1.id, 11, 5)
+    session = applyScore(session, 0, r0c2.id, 11, 7)
+    session = advanceToNextRound(session)
+
+    const r1 = session.rounds[1]!
+    const r1c1 = r1.matches.find((m) => m.court === 1)!
+    session = applyScore(session, 1, r1c1.id, 11, 9)
+    const frozen = r1.matches.map((m) => [...m.teamA, ...m.teamB].join('|'))
+
+    session = editMatchScore(session, 0, r0c1.id, 5, 11)
+
+    expect(session.rounds[1]!.matches.map((m) => [...m.teamA, ...m.teamB].join('|'))).toEqual(
+      frozen,
+    )
+    expect(session.scores[r0c1.teamA[0]]).toBeLessThan(0)
+    const standings = computeStandings(session)
+    const flippedWinners = standings.filter((s) => r0c1.teamB.includes(s.playerId))
+    expect(flippedWinners.every((s) => s.gamesWon >= 1)).toBe(true)
+  })
+
+  it('re-seeds an unscored first KC round from corrected Americano standings', () => {
+    let session = americanoSession(8, 2)
+    for (const m of session.rounds[0]!.matches) {
+      session = applyScore(session, 0, m.id, 11, 5)
+    }
+    session = switchToKingsCourt(session, 'standings')
+    expect(session.currentRoundIndex).toBe(1)
+
+    const m0 = session.rounds[0]!.matches[0]!
+    session = editMatchScore(session, 0, m0.id, 5, 11)
+
+    const top = seedPlayersFromStandings(session).map((p) => p.id)
+    const court1 = session.rounds[1]!.matches.find((m) => m.court === 1)!
+    const onKings = [...court1.teamA, ...court1.teamB]
+    expect(new Set(onKings)).toEqual(new Set(top.slice(0, 4)))
+  })
+})
+
+describe('saveMatchScore', () => {
+  it('enters a new score or edits an existing one', () => {
+    let session = americanoSession(4, 1)
+    const match = session.rounds[0]!.matches[0]!
+    session = saveMatchScore(session, 0, match.id, 11, 5)
+    expect(session.scores[match.teamA[0]]).toBe(6)
+    session = saveMatchScore(session, 0, match.id, 11, 7)
+    expect(session.scores[match.teamA[0]]).toBe(4)
+    expect(session.rounds[0]!.matches[0]!.scoreB).toBe(7)
   })
 })
