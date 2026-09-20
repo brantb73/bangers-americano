@@ -28,6 +28,11 @@ jobs:
       - name: Install
         run: npm ci
       - name: Build
+        env:
+          # Worker origin (https://….workers.dev) or full /tts URL. Unset → UI falls back to /api/tts.
+          # Set after deploying tts-worker: repo Settings → Secrets and variables → Actions
+          # → Variables (or Secrets) → VITE_TTS_URL
+          VITE_TTS_URL: ${{ vars.VITE_TTS_URL || secrets.VITE_TTS_URL }}
         run: npm run build
       - name: Setup Pages
         uses: actions/configure-pages@v5

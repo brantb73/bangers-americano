@@ -248,9 +248,10 @@ export function RecapPanel({
       <h2>{title}</h2>
       <p className="hint">
         Snarky Bangers highlight-reel podcast from scores, standings, and your courtside
-        comments. <strong>Generate audio</strong> makes a real .mp3 (needs the running app
-        server). <strong>Share audio</strong> sends the file when the OS allows; otherwise
-        it downloads so you can attach it. Web Speech ▶ Play stays as a quick preview.
+        comments. <strong>Generate audio</strong> makes a real .mp3 (hosted TTS on GitHub
+        Pages, or same-origin /api/tts when you run Vite). <strong>Share audio</strong> sends
+        the file when the OS allows; otherwise it downloads so you can attach it. Web Speech
+        ▶ Play stays as a quick preview.
         {supported ? '' : ' (Browser speech preview not supported.)'}
       </p>
 

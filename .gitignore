@@ -5,6 +5,10 @@ node_modules
 dist
 dist-ssr
 
+# Cloudflare Wrangler
+.wrangler/
+tts-worker/.wrangler/
+
 # Python TTS venv
 .venv/
 __pycache__/
