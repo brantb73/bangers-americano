@@ -1,6 +1,9 @@
-/** Client helpers for /api/tts audio generation. */
+/** Client helpers for TTS audio generation (hosted worker or same-origin /api/tts). */
 
 export const TTS_MAX_CHARS = 4500
+/** Warm conversational US English — podcast host vibe (same as the Vite plugin). */
+export const TTS_VOICE = 'en-US-AndrewNeural'
+export const LOCAL_TTS_PATH = '/api/tts'
 
 export function prepareTtsText(script: string): { text: string; truncated: boolean } {
   const trimmed = script.trim()
@@ -20,8 +23,56 @@ export class TtsError extends Error {
   }
 }
 
-/** POST /api/tts — requires the Vite (or preview) server with TTS middleware. */
-export async function fetchTtsAudio(script: string): Promise<{
+/**
+ * Resolve where the browser should POST `{ text, voice }`.
+ * `VITE_TTS_URL` may be a Worker origin (`https://….workers.dev`) or a full `/tts` URL.
+ * Unset / blank falls back to same-origin `/api/tts` (Vite dev + preview).
+ */
+export function resolveTtsEndpoint(
+  remoteUrl: string | undefined = import.meta.env.VITE_TTS_URL,
+): string {
+  const trimmed = typeof remoteUrl === 'string' ? remoteUrl.trim() : ''
+  if (!trimmed) return LOCAL_TTS_PATH
+  const noSlash = trimmed.replace(/\/+$/, '')
+  return /\/tts$/i.test(noSlash) ? noSlash : `${noSlash}/tts`
+}
+
+export function buildTtsRequestBody(text: string, voice = TTS_VOICE): { text: string; voice: string } {
+  return { text, voice }
+}
+
+export function isLocalTtsEndpoint(endpoint: string): boolean {
+  if (endpoint.startsWith('/')) return true
+  try {
+    const url = new URL(endpoint)
+    return url.pathname === LOCAL_TTS_PATH || url.pathname.endsWith(LOCAL_TTS_PATH)
+  } catch {
+    return false
+  }
+}
+
+/** Courtside copy when fetch fails (network, static host, or CORS). */
+export function unreachableTtsMessage(endpoint: string): string {
+  if (isLocalTtsEndpoint(endpoint)) {
+    return 'Could not reach /api/tts — is the app server running? (npm run dev, not static-only hosting)'
+  }
+  return (
+    'Courtside audio is blocked — the TTS worker rejected this origin (CORS) or is unreachable. ' +
+    'Confirm VITE_TTS_URL and that the worker allows https://brantb73.github.io plus localhost Vite origins.'
+  )
+}
+
+export type FetchTtsOptions = {
+  endpoint?: string
+  voice?: string
+  fetchImpl?: typeof fetch
+}
+
+/** POST JSON `{ text, voice }` — remote Worker when `VITE_TTS_URL` is set, else `/api/tts`. */
+export async function fetchTtsAudio(
+  script: string,
+  options: FetchTtsOptions = {},
+): Promise<{
   blob: Blob
   truncated: boolean
   voice: string | null
@@ -29,18 +80,19 @@ export async function fetchTtsAudio(script: string): Promise<{
   const { text, truncated } = prepareTtsText(script)
   if (!text) throw new TtsError('Nothing to narrate', 400)
 
+  const endpoint = options.endpoint ?? resolveTtsEndpoint()
+  const voice = options.voice ?? TTS_VOICE
+  const doFetch = options.fetchImpl ?? fetch
+
   let res: Response
   try {
-    res = await fetch('/api/tts', {
+    res = await doFetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify(buildTtsRequestBody(text, voice)),
     })
   } catch {
-    throw new TtsError(
-      'Could not reach /api/tts — is the app server running? (npm run dev, not static-only hosting)',
-      0,
-    )
+    throw new TtsError(unreachableTtsMessage(endpoint), 0)
   }
 
   if (!res.ok) {
@@ -55,9 +107,9 @@ export async function fetchTtsAudio(script: string): Promise<{
   }
 
   const blob = await res.blob()
-  const voice = res.headers.get('X-TTS-Voice')
+  const usedVoice = res.headers.get('X-TTS-Voice')
   const wasTruncated = truncated || res.headers.get('X-TTS-Truncated') === '1'
-  return { blob, truncated: wasTruncated, voice }
+  return { blob, truncated: wasTruncated, voice: usedVoice }
 }
 
 export function downloadBlob(blob: Blob, filename: string): void {

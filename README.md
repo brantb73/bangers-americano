@@ -2,7 +2,7 @@
 
 Mobile-first web app for running recreational **doubles Americano** pickleball sessions — rotating partners, individual **point differential**. Session state lives in `localStorage` **per browser/device** (a tunnel URL on your phone won’t see laptop data). Use **Export/Import** on the home screen to move sessions.
 
-Scoring UI is client-only. **Shareable .mp3 recaps** need the Vite app server (see [Audio share](#audio-share-real-mp3)). Static hosts (GitHub Pages, Netlify, S3, etc.) serve the UI without `/api/tts`.
+Scoring UI is client-only. **Shareable .mp3 recaps** use a hosted Cloudflare Worker on GitHub Pages (see [Hosted .mp3 recaps](#hosted-mp3-recaps-github-pages)), or same-origin `/api/tts` when you run Vite locally (see [Audio share](#audio-share-real-mp3)).
 
 ## How to run
 
@@ -35,10 +35,10 @@ Vite is configured with `base: '/bangers-americano/'` for the project site:
 
 **https://brantb73.github.io/bangers-americano/**
 
-`npm run build` emits a static site in `dist/`. On every push to `main`, `.github/workflows/deploy-pages.yml` runs `npm ci`, `npm run build`, uploads `dist`, and deploys with `actions/upload-pages-artifact` + `actions/deploy-pages`.
+`npm run build` emits a static site in `dist/`. On every push to `main`, `.github/workflows/deploy-pages.yml` runs `npm ci`, `npm run build` (injecting `VITE_TTS_URL` when set), uploads `dist`, and deploys with `actions/upload-pages-artifact` + `actions/deploy-pages`.
 
 - **UI works** without a Node process: roster, scoring, standings, history, text recaps, and Web Speech preview.
-- **`POST /api/tts` is not available** on GitHub Pages (or any static host). Generate/share **.mp3** recaps only when running `npm run dev` or `npm run preview` with the Vite plugin and [edge-tts](#audio-share-real-mp3) set up.
+- **Generate audio / Share .mp3** on Pages calls the remote Worker from `VITE_TTS_URL` (see [Hosted .mp3 recaps](#hosted-mp3-recaps-github-pages)). Same-origin `/api/tts` exists only for `npm run dev` / `preview`.
 
 ### Enable Pages after this lands on `main`
 
@@ -70,7 +70,7 @@ If Pages was enabled after the first `main` workflow already ran, open **Actions
 - When you **End session**, the app builds a **snarky Bangers podcast / highlight-reel** script from scores, standings, sit-outs, and comments.
 - **▶ Play preview** uses the browser Web Speech API (quick listen; cannot export a file).
 - **Share as text** / Copy / Download `.txt` send the script to Messages, email, etc.
-- **Generate audio** / **Share audio** / **Download .mp3** synthesize a real MP3 via the app server (see below). Script is saved on the session and history entry.
+- **Generate audio** / **Share audio** / **Download .mp3** synthesize a real MP3 via the hosted Worker (Pages) or local `/api/tts` (Vite). Script is saved on the session and history entry.
 
 ### History
 
@@ -80,13 +80,40 @@ Ended sessions are listed on the home/setup screen (newest first), labeled by lo
 
 Sit-outs / byes are distributed so players with the fewest sit-outs so far sit next.
 
+## Hosted .mp3 recaps (GitHub Pages)
+
+GitHub Pages cannot serve `/api/tts`. After a one-time free Cloudflare Worker deploy, the static site `POST`s `{ text, voice }` to that Worker and gets `audio/mpeg` back. **No paid TTS API.** Voice stays `en-US-AndrewNeural` (Andrew).
+
+### One-time setup (Barry)
+
+1. Create a free [Cloudflare](https://dash.cloudflare.com/sign-up) account (Workers free tier is enough).
+2. On a machine with Node, from this repo:
+
+   ```bash
+   cd tts-worker
+   npx wrangler login          # browser login, first time only
+   npx wrangler deploy
+   ```
+
+3. Copy the Worker URL Wrangler prints, e.g. `https://bangers-americano-tts.<your-subdomain>.workers.dev` (do **not** add `/tts` unless you want to; the app accepts either).
+4. In the GitHub repo: **Settings → Secrets and variables → Actions → Variables** (or **Secrets**) → New →  
+   `VITE_TTS_URL` = `https://bangers-americano-tts.<your-subdomain>.workers.dev`
+5. Re-run the Pages deploy: **Actions → Deploy GitHub Pages → Run workflow**, or push/merge to `main`. Vite bakes `VITE_TTS_URL` into the client at build time.
+
+The Worker allows CORS from `https://brantb73.github.io` and localhost Vite origins (`localhost` / `127.0.0.1`). A CORS failure shows a courtside message on the recap panel.
+
+Optional local override: put `VITE_TTS_URL=https://….workers.dev` in `.env.local` so `npm run dev` hits the Worker instead of `/api/tts`.
+
+Worker endpoints: `GET /health`, `POST /tts` with `{ "text": "...", "voice": "en-US-AndrewNeural" }` → `audio/mpeg`.
+
 ## Audio share (real .mp3)
 
-`speechSynthesis` cannot export an audio file. Bangers uses a same-origin **`POST /api/tts`** Vite middleware that runs **edge-tts** (Microsoft Edge neural voices) and returns `audio/mpeg`.
+`speechSynthesis` cannot export an audio file. The browser `POST`s JSON `{ text, voice }` expecting `audio/mpeg`:
+
+- **Hosted:** `VITE_TTS_URL` (Cloudflare Worker in `tts-worker/`) when that env is set at build time.
+- **Laptop:** same-origin **`POST /api/tts`** Vite middleware that runs **edge-tts** (`.venv`) — `npm run dev` / `npm run preview`.
 
 **Voice:** `en-US-AndrewNeural` (warm conversational US English — podcast host vibe).
-
-This path requires the Vite server plugin (`server/ttsPlugin.ts`) plus a local Python venv with `edge-tts` (`requirements-tts.txt`). Static hosting of `dist/` does **not** include `/api/tts`.
 
 ### One-time setup (on the machine running Vite)
 
@@ -95,18 +122,17 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements-tts.txt   # installs edge-tts
 ```
 
-Needs network access for edge-tts to reach Microsoft’s TTS endpoint.
+Needs network access for edge-tts to reach Microsoft’s TTS endpoint. Leave `VITE_TTS_URL` unset so the UI keeps using `/api/tts`.
 
 ### Generate & share
 
-1. Run the app with **`npm run dev`** or **`npm run preview`** (not a static-only host — `/api/tts` must be served by Vite).
-2. Open the app (localhost, LAN, or Cloudflare tunnel to that Vite port — same origin).
-3. On the recap panel: **Generate audio** → optional in-page player → **Download .mp3** or **Share audio**.
-4. On phones that support Web Share with files, **Share audio** opens the system sheet (Messages, etc.). Otherwise the file downloads — attach it yourself (“Audio saved — attach it in Messages”).
+1. On **https://brantb73.github.io/bangers-americano/** after [hosted setup](#hosted-mp3-recaps-github-pages), **or** run **`npm run dev`** / **`npm run preview`** with the local `.venv`.
+2. On the recap panel: **Generate audio** → optional in-page player → **Download .mp3** or **Share audio**.
+3. On phones that support Web Share with files, **Share audio** opens the system sheet (Messages, etc.). Otherwise the file downloads — attach it yourself (“Audio saved — attach it in Messages”).
 
-Long scripts are capped (~4500 characters) with a truncation note. If TTS fails, the panel shows the error (server down, missing `.venv`, network, etc.).
+Long scripts are capped (~4500 characters) with a truncation note. If TTS fails, the panel shows the error (CORS, Worker down, missing `.venv`, network, etc.).
 
-**Tunnel:** Cloudflare (or similar) to the Vite server keeps `/api/tts` same-origin, so phone clients work without CORS hacks.
+**Tunnel:** Cloudflare (or similar) to the Vite server keeps `/api/tts` same-origin, so phone clients work without CORS hacks when you are not using the hosted Worker.
 
 ## King’s Court finish
 
@@ -118,6 +144,7 @@ During an active Americano session, tap **Switch to King’s Court**, confirm th
 
 - TypeScript · React · Vite
 - Unit tests (Vitest) for schedule, scoring/standings, history, share, and TTS helpers
+- Hosted TTS: Cloudflare Worker (`tts-worker/`) + `VITE_TTS_URL` on the Pages build
 - Dev/preview middleware: `POST /api/tts` via edge-tts (`.venv`)
 - Persistence:
   - Active session: `pickleball-americano-session-v1`

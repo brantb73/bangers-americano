@@ -32,7 +32,7 @@ function readBody(req: IncomingMessage): Promise<Buffer> {
   })
 }
 
-function runEdgeTts(text: string, outFile: string): Promise<void> {
+function runEdgeTts(text: string, outFile: string, voice = TTS_VOICE): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!existsSync(EDGE_TTS)) {
       reject(
@@ -44,7 +44,7 @@ function runEdgeTts(text: string, outFile: string): Promise<void> {
     }
     const child = spawn(
       EDGE_TTS,
-      ['--voice', TTS_VOICE, '--text', text, '--write-media', outFile],
+      ['--voice', voice, '--text', text, '--write-media', outFile],
       { stdio: ['ignore', 'pipe', 'pipe'] },
     )
     let stderr = ''
@@ -80,9 +80,9 @@ async function handleTts(
 
   try {
     const raw = await readBody(req)
-    let body: { text?: string }
+    let body: { text?: string; voice?: string }
     try {
-      body = JSON.parse(raw.toString('utf8')) as { text?: string }
+      body = JSON.parse(raw.toString('utf8')) as { text?: string; voice?: string }
     } catch {
       res.statusCode = 400
       res.setHeader('Content-Type', 'application/json')
@@ -98,15 +98,18 @@ async function handleTts(
       return
     }
 
+    const voice =
+      typeof body.voice === 'string' && body.voice.trim() ? body.voice.trim() : TTS_VOICE
+
     const id = randomBytes(8).toString('hex')
     const outFile = path.join(tmpdir(), `bangers-tts-${id}.mp3`)
     try {
-      await runEdgeTts(prepared.text, outFile)
+      await runEdgeTts(prepared.text, outFile, voice)
       const stat = await fs.stat(outFile)
       res.statusCode = 200
       res.setHeader('Content-Type', 'audio/mpeg')
       res.setHeader('Content-Length', String(stat.size))
-      res.setHeader('X-TTS-Voice', TTS_VOICE)
+      res.setHeader('X-TTS-Voice', voice)
       if (prepared.truncated) res.setHeader('X-TTS-Truncated', '1')
       res.setHeader('Cache-Control', 'no-store')
       createReadStream(outFile)
