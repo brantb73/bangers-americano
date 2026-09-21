@@ -27,8 +27,8 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
-      # Vite `base` is `/` so assets work on https://bangerstournify.com (site root).
-      # After merge, set GitHub Pages Custom domain to bangerstournify.com and add
+      # Vite `base` is `/` so assets work on https://bangerstourify.com (site root).
+      # After merge, set GitHub Pages Custom domain to bangerstourify.com and add
       # Cloudflare DNS: apex A records to GitHub Pages IPs, or www CNAME to
       # brantb73.github.io. `public/CNAME` is copied into dist/ on build.
       - name: Build

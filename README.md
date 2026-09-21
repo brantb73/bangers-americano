@@ -31,7 +31,7 @@ npm run preview   # serve the production build locally (includes /api/tts)
 
 ## Live app / GitHub Pages
 
-**https://bangerstournify.com**
+**https://bangerstourify.com**
 
 Vite production `base` is `'/'` because the custom domain is served from the **site root**. The old GitHub project path (`/bangers-americano/`) 404s CSS/JS/logo on a custom domain. Local `npm run dev` / `npm run preview` use the same `'/'` (open `http://localhost:5173/`).
 
@@ -46,8 +46,8 @@ GitHub Actions Pages **does not pick up `CNAME` from the artifact** — set the 
 
 1. Open the repo: [brantb73/bangers-americano](https://github.com/brantb73/bangers-americano) → **Settings** → **Pages**.
 2. Under **Build and deployment** → **Source**, keep **GitHub Actions**.
-3. Under **Custom domain**, enter `bangerstournify.com` and **Save**. Wait for GitHub’s DNS check, then enable **Enforce HTTPS** when it becomes available.
-4. In **Cloudflare** DNS for `bangerstournify.com` (prefer **DNS only** / grey cloud so GitHub can issue the Pages certificate):
+3. Under **Custom domain**, enter `bangerstourify.com` and **Save**. Wait for GitHub’s DNS check, then enable **Enforce HTTPS** when it becomes available.
+4. In **Cloudflare** DNS for `bangerstourify.com` (prefer **DNS only** / grey cloud so GitHub can issue the Pages certificate):
 
    **Apex (`@`) A records** → GitHub Pages IPs:
 
@@ -60,13 +60,13 @@ GitHub Actions Pages **does not pick up `CNAME` from the artifact** — set the 
 
    **`www` CNAME** → `brantb73.github.io` (the user site, not `/bangers-americano`).
 
-5. When the **Deploy GitHub Pages** workflow is green and DNS has propagated, open **https://bangerstournify.com**.
+5. When the **Deploy GitHub Pages** workflow is green and DNS has propagated, open **https://bangerstourify.com**.
 
 The old project URL `https://brantb73.github.io/bangers-americano/` may redirect to the custom domain once Pages is configured.
 
 If Pages was enabled after the first `main` workflow already ran, open **Actions** → **Deploy GitHub Pages** → **Run workflow** (workflow_dispatch) to publish without another commit.
 
-**Hosted TTS (when that worker lands):** allow CORS origins `https://bangerstournify.com` and `https://www.bangerstournify.com` in `tts-worker` (in addition to `https://brantb73.github.io` and localhost).
+**Hosted TTS (when that worker lands):** allow CORS origins `https://bangerstourify.com` and `https://www.bangerstourify.com` in `tts-worker` (in addition to `https://brantb73.github.io` and localhost).
 
 ## How a session works
 
