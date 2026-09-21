@@ -26,6 +26,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  min-width: 0;
 }
 
 .brand-logo-img {
@@ -36,20 +37,39 @@
 }
 
 .brand-logo-large .brand-logo-img {
-  width: min(320px, 88vw);
+  width: min(220px, 72vw);
+  max-height: min(230px, 34vh);
 }
 
 .brand-logo-compact {
   justify-content: flex-start;
   margin-bottom: 4px;
+  max-width: min(120px, 40vw);
 }
 
 .brand-logo-compact .brand-logo-img {
-  width: min(150px, 42vw);
+  width: min(96px, 34vw);
+  max-height: 100px;
 }
 
 .top-bar .brand-logo-compact + h1 {
   margin-top: 4px;
+}
+
+@media (max-width: 380px) {
+  .brand-logo-large .brand-logo-img {
+    width: min(180px, 68vw);
+    max-height: min(190px, 30vh);
+  }
+
+  .brand-logo-compact {
+    max-width: min(88px, 36vw);
+  }
+
+  .brand-logo-compact .brand-logo-img {
+    width: min(80px, 32vw);
+    max-height: 84px;
+  }
 }
 
 .hero h1,
