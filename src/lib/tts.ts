@@ -58,7 +58,7 @@ export function unreachableTtsMessage(endpoint: string): string {
   }
   return (
     'Courtside audio is blocked — the TTS worker rejected this origin (CORS) or is unreachable. ' +
-    'Confirm VITE_TTS_URL and that the worker allows https://brantb73.github.io plus localhost Vite origins.'
+    'Confirm VITE_TTS_URL and that the worker allows https://bangerstournify.com, https://www.bangerstournify.com, https://brantb73.github.io, plus localhost Vite origins.'
   )
 }
 

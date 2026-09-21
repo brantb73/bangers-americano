@@ -4,7 +4,11 @@
  */
 
 const DEFAULT_VOICE = 'en-US-AndrewNeural'
-const PAGES_ORIGIN = 'https://brantb73.github.io'
+const ALLOWED_PAGES_ORIGINS = new Set([
+  'https://brantb73.github.io',
+  'https://bangerstournify.com',
+  'https://www.bangerstournify.com',
+])
 const TTS_MAX_CHARS = 4500
 const SYNTH_TIMEOUT_MS = 25_000
 
@@ -22,7 +26,7 @@ type WorkerSocket = WebSocket & { accept(): void }
 type UpgradeResponse = Response & { webSocket?: WorkerSocket | null }
 
 function isAllowedOrigin(origin: string): boolean {
-  if (origin === PAGES_ORIGIN) return true
+  if (ALLOWED_PAGES_ORIGINS.has(origin)) return true
   try {
     const url = new URL(origin)
     const local =
