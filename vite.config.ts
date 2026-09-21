@@ -3,7 +3,10 @@ import { defineConfig } from 'vite'
 import { ttsApiPlugin } from './server/ttsPlugin.ts'
 
 export default defineConfig({
-  base: '/bangers-americano/',
+  // Custom domain https://bangerstournify.com is served at the site root.
+  // Using `/` (not `/bangers-americano/`) so production CSS/JS/logo resolve.
+  // Dev and preview use the same root, so http://localhost:5173/ keeps working.
+  base: '/',
   plugins: [react(), ttsApiPlugin()],
   server: {
     host: true,

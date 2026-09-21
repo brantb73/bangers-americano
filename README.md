@@ -100,7 +100,7 @@ GitHub Pages cannot serve `/api/tts`. After a one-time free Cloudflare Worker de
    `VITE_TTS_URL` = `https://bangers-americano-tts.<your-subdomain>.workers.dev`
 5. Re-run the Pages deploy: **Actions → Deploy GitHub Pages → Run workflow**, or push/merge to `main`. Vite bakes `VITE_TTS_URL` into the client at build time.
 
-The Worker allows CORS from `https://brantb73.github.io` and localhost Vite origins (`localhost` / `127.0.0.1`). A CORS failure shows a courtside message on the recap panel.
+The Worker allows CORS from `https://bangerstournify.com`, `https://www.bangerstournify.com`, `https://brantb73.github.io`, and localhost Vite origins (`localhost` / `127.0.0.1`). A CORS failure shows a courtside message on the recap panel.
 
 Optional local override: put `VITE_TTS_URL=https://….workers.dev` in `.env.local` so `npm run dev` hits the Worker instead of `/api/tts`.
 

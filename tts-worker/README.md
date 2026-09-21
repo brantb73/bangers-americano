@@ -11,3 +11,5 @@ npx wrangler deploy
 
 - `GET /health` → `{ "ok": true }`
 - `POST /tts` with `{ "text": "...", "voice": "en-US-AndrewNeural" }` → `audio/mpeg`
+
+CORS allowlist: `https://bangerstournify.com`, `https://www.bangerstournify.com`, `https://brantb73.github.io`, plus localhost / `127.0.0.1` / `[::1]`.

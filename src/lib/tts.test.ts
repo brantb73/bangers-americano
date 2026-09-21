@@ -91,6 +91,7 @@ describe('unreachableTtsMessage', () => {
     expect(msg).toMatch(/Courtside audio is blocked/)
     expect(msg).toMatch(/CORS/)
     expect(msg).toMatch(/brantb73\.github\.io/)
+    expect(msg).toMatch(/bangerstournify\.com/)
   })
 })
 
