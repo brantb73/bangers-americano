@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints (usually `http://localhost:5173/bangers-americano/` — the app is built with the GitHub Pages project base path).
+Then open the URL Vite prints (usually `http://localhost:5173/` — production and local both use Vite `base: '/'`).
 
 ### Test / build
 
@@ -24,32 +24,49 @@ npm run preview   # serve the production build locally (includes /api/tts)
 ### Open on a phone (same Wi‑Fi)
 
 1. Find your laptop’s local IP (e.g. `192.168.1.42`).
-2. On the phone browser go to `http://YOUR_IP:5173/bangers-americano/` (Vite is configured with `host: true`).
+2. On the phone browser go to `http://YOUR_IP:5173/` (Vite is configured with `host: true`).
 3. Add to Home Screen if you like — works offline for the loaded session UI once cached by the browser (still no backend).
 
 **Optional tunnel:** if phone and laptop are on different networks, use a tunnel such as [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/) or `npx localtunnel --port 5173` and open the public URL on the phone.
 
-## GitHub Pages / static hosting
+## Live app / GitHub Pages
 
-Vite is configured with `base: '/bangers-americano/'` for the project site:
+**https://bangerstournify.com**
 
-**https://brantb73.github.io/bangers-americano/**
+Vite production `base` is `'/'` because the custom domain is served from the **site root**. The old GitHub project path (`/bangers-americano/`) 404s CSS/JS/logo on a custom domain. Local `npm run dev` / `npm run preview` use the same `'/'` (open `http://localhost:5173/`).
 
-`npm run build` emits a static site in `dist/`. On every push to `main`, `.github/workflows/deploy-pages.yml` runs `npm ci`, `npm run build`, uploads `dist`, and deploys with `actions/upload-pages-artifact` + `actions/deploy-pages`.
+`npm run build` emits a static site in `dist/` (including `public/CNAME` → `dist/CNAME`). On every push to `main`, `.github/workflows/deploy-pages.yml` runs `npm ci`, `npm run build`, uploads `dist`, and deploys with `actions/upload-pages-artifact` + `actions/deploy-pages`. The workflow does not need a different build command for the custom domain.
 
 - **UI works** without a Node process: roster, scoring, standings, history, text recaps, and Web Speech preview.
 - **`POST /api/tts` is not available** on GitHub Pages (or any static host). Generate/share **.mp3** recaps only when running `npm run dev` or `npm run preview` with the Vite plugin and [edge-tts](#audio-share-real-mp3) set up.
 
-### Enable Pages after this lands on `main`
+### Custom domain (after merge)
 
-1. Open the repo on GitHub: [brantb73/bangers-americano](https://github.com/brantb73/bangers-americano).
-2. Click **Settings**.
-3. In the left sidebar, click **Pages**.
-4. Under **Build and deployment** → **Source**, choose **GitHub Actions** (not “Deploy from a branch”).
-5. Merge this change to `main` (or push to `main` if it is already merged). Watch **Actions** for the **Deploy GitHub Pages** workflow.
-6. When the **deploy** job is green, open **https://brantb73.github.io/bangers-americano/**.
+GitHub Actions Pages **does not pick up `CNAME` from the artifact** — set the domain in the UI as well.
+
+1. Open the repo: [brantb73/bangers-americano](https://github.com/brantb73/bangers-americano) → **Settings** → **Pages**.
+2. Under **Build and deployment** → **Source**, keep **GitHub Actions**.
+3. Under **Custom domain**, enter `bangerstournify.com` and **Save**. Wait for GitHub’s DNS check, then enable **Enforce HTTPS** when it becomes available.
+4. In **Cloudflare** DNS for `bangerstournify.com` (prefer **DNS only** / grey cloud so GitHub can issue the Pages certificate):
+
+   **Apex (`@`) A records** → GitHub Pages IPs:
+
+   | Type | Name | Content |
+   | --- | --- | --- |
+   | A | `@` | `185.199.108.153` |
+   | A | `@` | `185.199.109.153` |
+   | A | `@` | `185.199.110.153` |
+   | A | `@` | `185.199.111.153` |
+
+   **`www` CNAME** → `brantb73.github.io` (the user site, not `/bangers-americano`).
+
+5. When the **Deploy GitHub Pages** workflow is green and DNS has propagated, open **https://bangerstournify.com**.
+
+The old project URL `https://brantb73.github.io/bangers-americano/` may redirect to the custom domain once Pages is configured.
 
 If Pages was enabled after the first `main` workflow already ran, open **Actions** → **Deploy GitHub Pages** → **Run workflow** (workflow_dispatch) to publish without another commit.
+
+**Hosted TTS (when that worker lands):** allow CORS origins `https://bangerstournify.com` and `https://www.bangerstournify.com` in `tts-worker` (in addition to `https://brantb73.github.io` and localhost).
 
 ## How a session works
 
