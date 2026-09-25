@@ -25,6 +25,9 @@ interface Props {
   resultMoveNote?: string | null
   /** Extra class on the card (King’s Court throne styling). */
   cardClassName?: string
+  /** Tap a name to start or complete a lineup swap. Omit to show plain names. */
+  onSelectPlayer?: (playerId: string) => void
+  selectedPlayerId?: string | null
 }
 
 export function ScoreEntry({
@@ -40,6 +43,8 @@ export function ScoreEntry({
   movementHint,
   resultMoveNote,
   cardClassName,
+  onSelectPlayer,
+  selectedPlayerId,
 }: Props) {
   const [a, setA] = useState('')
   const [b, setB] = useState('')
@@ -52,6 +57,24 @@ export function ScoreEntry({
   const done = match.scoreA !== null && match.scoreB !== null
   const hasComment = Boolean(match.comment?.trim())
   const showForm = !done || editingScore
+  const locked = match.scoreA !== null || match.scoreB !== null
+
+  function PlayerChip({ id }: { id: string }) {
+    const label = playerName(players, id)
+    if (!onSelectPlayer) return <div>{label}</div>
+    const selected = selectedPlayerId === id
+    return (
+      <button
+        type="button"
+        className={`player-chip${selected ? ' selected' : ''}${locked ? ' locked' : ''}`}
+        aria-pressed={selected}
+        aria-label={selected ? `${label}, selected to swap` : `Swap ${label}`}
+        onClick={() => onSelectPlayer(id)}
+      >
+        {label}
+      </button>
+    )
+  }
 
   function parseScores(): { scoreA: number; scoreB: number } | null {
     const scoreA = Number(a)
@@ -160,8 +183,8 @@ export function ScoreEntry({
       <div className="score-entry-grid">
         <div className="team-col">
           <div className="team-names">
-            <div>{playerName(players, match.teamA[0])}</div>
-            <div>&amp; {playerName(players, match.teamA[1])}</div>
+            <PlayerChip id={match.teamA[0]} />
+            <PlayerChip id={match.teamA[1]} />
           </div>
           <input
             className="input score-input"
@@ -177,8 +200,8 @@ export function ScoreEntry({
         <div className="vs">vs</div>
         <div className="team-col">
           <div className="team-names">
-            <div>{playerName(players, match.teamB[0])}</div>
-            <div>&amp; {playerName(players, match.teamB[1])}</div>
+            <PlayerChip id={match.teamB[0]} />
+            <PlayerChip id={match.teamB[1]} />
           </div>
           <input
             className="input score-input"
@@ -241,8 +264,8 @@ export function ScoreEntry({
       </div>
       <div className="score-result">
         <div className="team">
-          <div>{playerName(players, match.teamA[0])}</div>
-          <div>{playerName(players, match.teamA[1])}</div>
+          <PlayerChip id={match.teamA[0]} />
+          <PlayerChip id={match.teamA[1]} />
         </div>
         {scoresEditable ? (
           <button
@@ -259,8 +282,8 @@ export function ScoreEntry({
           </div>
         )}
         <div className="team">
-          <div>{playerName(players, match.teamB[0])}</div>
-          <div>{playerName(players, match.teamB[1])}</div>
+          <PlayerChip id={match.teamB[0]} />
+          <PlayerChip id={match.teamB[1]} />
         </div>
       </div>
       {resultMoveNote ? <p className="move-note">{resultMoveNote}</p> : null}

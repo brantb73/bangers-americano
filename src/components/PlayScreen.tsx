@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   courtMovementHint,
   courtTitle,
@@ -26,6 +26,8 @@ interface Props {
   onSetWinBy: (n: WinBy) => void
   onAddPlayer: (name: string) => string | null
   onToggleSit: (id: string) => string | null
+  onLeavePlayer: (id: string) => string | null
+  onSwapPlayers: (playerAId: string, playerBId: string) => string | null
   onSaveComment: (roundIndex: number, matchId: string, comment: string) => void
   onSaveRoundNote: (roundIndex: number, note: string) => void
   onRenamePlayer: (id: string, name: string) => string | null
@@ -42,6 +44,8 @@ export function PlayScreen({
   onSetWinBy,
   onAddPlayer,
   onToggleSit,
+  onLeavePlayer,
+  onSwapPlayers,
   onSaveComment,
   onSaveRoundNote,
   onRenamePlayer,
@@ -55,6 +59,15 @@ export function PlayScreen({
   const [kcConfirm, setKcConfirm] = useState(false)
   const [kcSeed, setKcSeed] = useState<KingsCourtSeed>('standings')
   const [showEarlier, setShowEarlier] = useState(false)
+  const [swapId, setSwapId] = useState<string | null>(null)
+  const [swapError, setSwapError] = useState<string | null>(null)
+  const [swapNote, setSwapNote] = useState<string | null>(null)
+
+  useEffect(() => {
+    setSwapId(null)
+    setSwapError(null)
+    setSwapNote(null)
+  }, [session.currentRoundIndex])
 
   const round = session.rounds[session.currentRoundIndex]
   if (!round) {
@@ -79,10 +92,42 @@ export function PlayScreen({
     .map((r, i) => ({ round: r, index: i }))
     .filter(({ round }) => round.matches.some((m) => m.scoreA !== null && m.scoreB !== null))
 
+  function handleSwapTap(playerId: string) {
+    setSwapNote(null)
+    const played = round.matches.find(
+      (m) => m.teamA.includes(playerId) || m.teamB.includes(playerId),
+    )
+    if (played && (played.scoreA !== null || played.scoreB !== null)) {
+      setSwapError(
+        `Court ${played.court} already has a score. Use Edit score instead of swapping.`,
+      )
+      return
+    }
+    if (!swapId) {
+      setSwapError(null)
+      setSwapId(playerId)
+      return
+    }
+    if (swapId === playerId) {
+      setSwapId(null)
+      setSwapError(null)
+      return
+    }
+    const msg = onSwapPlayers(swapId, playerId)
+    if (msg?.startsWith('ERR:')) {
+      setSwapError(msg.slice(4))
+      return
+    }
+    setSwapId(null)
+    setSwapError(null)
+    setSwapNote(msg)
+  }
+
   function renderMatches(
     round: (typeof session.rounds)[number],
     roundIndex: number,
     commentsEditable: boolean,
+    swapable: boolean,
   ) {
     const roundIsKc = round.kind === 'kingsCourt'
     const roundCourts = roundIsKc
@@ -105,6 +150,8 @@ export function PlayScreen({
           roundIsKc ? describeMatchMovement(m, roundCourts, session.players) : null
         }
         cardClassName={roundIsKc && m.court === 1 ? 'kings-court-card' : undefined}
+        onSelectPlayer={swapable ? handleSwapTap : undefined}
+        selectedPlayerId={swapable ? swapId : null}
       />
     ))
   }
@@ -161,6 +208,7 @@ export function PlayScreen({
           sittingOutIds={round.sittingOut}
           onAdd={onAddPlayer}
           onToggleSit={onToggleSit}
+          onLeave={onLeavePlayer}
           onRename={onRenamePlayer}
         />
       )}
@@ -187,10 +235,45 @@ export function PlayScreen({
             ? 'rotates at the bottom courts, fewest sits first'
             : undefined
         }
+        onSelectPlayer={handleSwapTap}
+        selectedPlayerId={swapId}
       />
 
+      {swapId ? (
+        <div className="swap-banner" role="status">
+          <p>
+            Tap who should switch with{' '}
+            <strong>{session.players.find((p) => p.id === swapId)?.name ?? 'them'}</strong>.
+          </p>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              setSwapId(null)
+              setSwapError(null)
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <p className="hint swap-hint">
+          Tap a player, then tap who to swap with. Scored courts stay locked.
+        </p>
+      )}
+      {swapError && (
+        <p className="warn" role="alert">
+          {swapError}
+        </p>
+      )}
+      {swapNote && !swapError && (
+        <p className="roster-msg" role="status">
+          {swapNote}
+        </p>
+      )}
+
       <div className="matches">
-        {renderMatches(round, ri, true)}
+        {renderMatches(round, ri, true, true)}
       </div>
 
       {earlierRounds.length > 0 && (
@@ -219,7 +302,7 @@ export function PlayScreen({
                       ? `King’s Court · Round ${past.number}`
                       : `Round ${past.number}`}
                   </h3>
-                  <div className="matches">{renderMatches(past, index, true)}</div>
+                  <div className="matches">{renderMatches(past, index, true, false)}</div>
                 </div>
               ))}
             </div>

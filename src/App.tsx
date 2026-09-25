@@ -48,6 +48,8 @@ export default function App() {
           onSetWinBy={api.setWinBy}
           onAddPlayer={api.addPlayerDuringPlay}
           onToggleSit={api.toggleSitDuringPlay}
+          onLeavePlayer={api.leavePlayerDuringPlay}
+          onSwapPlayers={api.swapPlayersDuringPlay}
           onSaveComment={api.saveComment}
           onSaveRoundNote={api.saveRoundNote}
           onRenamePlayer={api.renamePlayer}
