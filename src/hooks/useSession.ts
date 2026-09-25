@@ -31,6 +31,7 @@ import {
   setRoundNote,
   setWinBy,
   startSession,
+  swapPlayers,
   switchToKingsCourt,
   toggleSit,
 } from '../lib/session'
@@ -78,11 +79,11 @@ export function useSession() {
           msg = `ERR:${result.reason ?? 'Could not add'}`
           return s
         }
-        if (result.regenerated) {
-          msg = `${name.trim()} added — round updated`
-        } else {
-          msg = result.reason ?? `${name.trim()} added`
-        }
+        msg =
+          result.reason ??
+          (result.regenerated
+            ? `${name.trim()} added — round updated`
+            : `${name.trim()} added`)
         return result.session
       })
       return msg
@@ -109,7 +110,22 @@ export function useSession() {
           return s
         }
         const name = s.players.find((p) => p.id === id)?.name ?? 'Player'
-        msg = result.regenerated ? `${name} left — round updated` : `${name} left`
+        msg = result.regenerated
+          ? `${name} left — round updated`
+          : (result.reason ?? `${name} left`)
+        return result.session
+      })
+      return msg
+    },
+    swapPlayersDuringPlay: (playerAId: string, playerBId: string): string | null => {
+      let msg: string | null = null
+      setSession((s) => {
+        const result = swapPlayers(s, playerAId, playerBId)
+        if (!result.ok) {
+          msg = `ERR:${result.reason ?? 'Could not swap'}`
+          return s
+        }
+        msg = result.reason ?? 'Swapped'
         return result.session
       })
       return msg

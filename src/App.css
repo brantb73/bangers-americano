@@ -292,9 +292,12 @@
 }
 
 .team-names {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   font-size: 1rem;
   font-weight: 650;
-  min-height: 2.6em;
 }
 
 .vs {
@@ -318,6 +321,13 @@
   gap: 8px;
   align-items: center;
   text-align: center;
+}
+
+.score-result .team {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
 .score-big {
@@ -1069,4 +1079,124 @@
   font-size: 0.9rem;
   font-weight: 650;
   line-height: 1.4;
+}
+
+/* —— Lineup swap —— */
+.player-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.player-chip.selected,
+.sitting-chip.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.player-chip.locked {
+  opacity: 0.72;
+}
+
+.sitting-chip {
+  border: 2px solid transparent;
+}
+
+.swap-banner {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 2px solid var(--accent);
+  background: #102433;
+}
+
+.swap-banner p {
+  margin: 0;
+  font-weight: 650;
+}
+
+.swap-hint {
+  margin: 0;
+  text-align: center;
+}
+
+/* —— Roster Sit + Leave —— */
+.roster-list > .player-list-item {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.roster-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.roster-main .player-name-row,
+.roster-main .player-rename-form {
+  flex: 1;
+  min-width: 0;
+}
+
+.roster-actions,
+.leave-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.roster-actions .btn,
+.leave-confirm-actions .btn {
+  flex: 1;
+}
+
+.btn-leave {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.leave-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--danger);
+  background: rgba(255, 107, 107, 0.08);
+}
+
+.leave-confirm p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.player-name-row .btn {
+  flex-shrink: 0;
+}
+
+.player-name-row .player-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

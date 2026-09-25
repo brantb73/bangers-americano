@@ -23,7 +23,7 @@ import {
   unbumpSitOuts,
   unrecordPartnerships,
 } from './schedule'
-import type { KingsCourtSeed, Player, RosterChangeResult, Round, Session, WinBy } from './types'
+import type { KingsCourtSeed, Match, Player, RosterChangeResult, Round, Session, WinBy } from './types'
 
 export const STORAGE_KEY = 'pickleball-americano-session-v1'
 
@@ -196,9 +196,68 @@ export function regenerateCurrentRound(session: Session): Session {
 }
 
 /**
+ * Bring back someone who left, keeping their id, differential, and history.
+ * Unscored current round is rebuilt so they can play now; a scored round
+ * keeps its lineup and they rejoin on the next round.
+ */
+export function reactivatePlayer(session: Session, playerId: string): RosterChangeResult {
+  if (session.status === 'finished') {
+    return { session, ok: false, reason: 'Session is finished' }
+  }
+  const player = session.players.find((p) => p.id === playerId)
+  if (!player) return { session, ok: false, reason: 'Player not found' }
+  if (isPlayerActive(player)) {
+    return { session, ok: false, reason: 'That name is already in the list.' }
+  }
+
+  let next: Session = {
+    ...session,
+    players: session.players.map((p) =>
+      p.id === playerId ? { ...p, active: true } : p,
+    ),
+    scores: { ...session.scores, [playerId]: session.scores[playerId] ?? 0 },
+    sitOutCounts: {
+      ...session.sitOutCounts,
+      [playerId]: session.sitOutCounts[playerId] ?? 0,
+    },
+  }
+
+  if (session.status === 'setup') {
+    return { session: next, ok: true, reason: `${player.name} is back` }
+  }
+
+  if (currentRoundHasScores(next)) {
+    return {
+      session: next,
+      ok: true,
+      regenerated: false,
+      reason: `${player.name} is back — joins next round`,
+    }
+  }
+
+  try {
+    next = regenerateCurrentRound(next)
+    return {
+      session: next,
+      ok: true,
+      regenerated: true,
+      reason: `${player.name} is back — round updated`,
+    }
+  } catch (e) {
+    return {
+      session: next,
+      ok: true,
+      regenerated: false,
+      reason: e instanceof Error ? e.message : 'Brought back, but could not rebuild round',
+    }
+  }
+}
+
+/**
  * Add a player during setup or an active session.
  * Active + unscored current round → regenerate so they can play now.
  * Active + scored round → join roster for subsequent rounds only.
+ * Adding the name of someone who left brings that same player back.
  */
 export function addPlayer(session: Session, name: string): RosterChangeResult {
   const trimmed = name.trim()
@@ -208,6 +267,15 @@ export function addPlayer(session: Session, name: string): RosterChangeResult {
   if (session.status === 'finished') {
     return { session, ok: false, reason: 'Session is finished' }
   }
+
+  const key = trimmed.toLowerCase()
+  const left = session.players.find(
+    (p) => p.active === false && p.name.trim().toLowerCase() === key,
+  )
+  if (left) {
+    return reactivatePlayer(session, left.id)
+  }
+
   if (session.players.length >= 16) {
     return { session, ok: false, reason: 'Max 16 players' }
   }
@@ -256,9 +324,9 @@ export function addPlayer(session: Session, name: string): RosterChangeResult {
 }
 
 /**
- * Mark a player as left during an active session (keeps differential on standings).
- * If current round has any scores → block.
- * If no scores → mark inactive and regenerate current round.
+ * Mark a player as left for the rest of the session (keeps differential on standings).
+ * Unscored current round is regenerated without them.
+ * If any score is already in, they finish this round and drop out of the next one.
  */
 export function leavePlayer(session: Session, playerId: string): RosterChangeResult {
   if (session.status === 'setup') {
@@ -272,14 +340,6 @@ export function leavePlayer(session: Session, playerId: string): RosterChangeRes
   if (!player) return { session, ok: false, reason: 'Player not found' }
   if (!isPlayerActive(player)) {
     return { session, ok: false, reason: 'Already left' }
-  }
-
-  if (currentRoundHasScores(session)) {
-    return {
-      session,
-      ok: false,
-      reason: 'Finish or undo scores in this round before removing a player',
-    }
   }
 
   const activeCount = activePlayers(session).length
@@ -300,6 +360,15 @@ export function leavePlayer(session: Session, playerId: string): RosterChangeRes
       sit: (session.sitRequests?.sit ?? []).filter((id) => id !== playerId),
       play: (session.sitRequests?.play ?? []).filter((id) => id !== playerId),
     },
+  }
+
+  if (currentRoundHasScores(next)) {
+    return {
+      session: next,
+      ok: true,
+      regenerated: false,
+      reason: `${player.name} left — out from the next round`,
+    }
   }
 
   try {
@@ -434,6 +503,135 @@ export function toggleSit(session: Session, playerId: string): RosterChangeResul
       ok: false,
       reason: e instanceof Error ? e.message : 'Could not rebuild round',
     }
+  }
+}
+
+function matchHasEnteredScore(match: Match): boolean {
+  return match.scoreA !== null || match.scoreB !== null
+}
+
+type LineupSlot =
+  | { kind: 'court'; matchIndex: number; team: 'A' | 'B'; index: 0 | 1 }
+  | { kind: 'sit'; index: number }
+
+function findLineupSlot(round: Round, playerId: string): LineupSlot | null {
+  for (let matchIndex = 0; matchIndex < round.matches.length; matchIndex++) {
+    const match = round.matches[matchIndex]!
+    const a = match.teamA.indexOf(playerId)
+    if (a === 0 || a === 1) return { kind: 'court', matchIndex, team: 'A', index: a }
+    const b = match.teamB.indexOf(playerId)
+    if (b === 0 || b === 1) return { kind: 'court', matchIndex, team: 'B', index: b }
+  }
+  const sitIndex = round.sittingOut.indexOf(playerId)
+  if (sitIndex >= 0) return { kind: 'sit', index: sitIndex }
+  return null
+}
+
+function playerAt(round: Round, slot: LineupSlot): string {
+  if (slot.kind === 'sit') return round.sittingOut[slot.index]!
+  const match = round.matches[slot.matchIndex]!
+  return slot.team === 'A' ? match.teamA[slot.index] : match.teamB[slot.index]
+}
+
+function writeSlot(round: Round, slot: LineupSlot, playerId: string): Round {
+  if (slot.kind === 'sit') {
+    return {
+      ...round,
+      sittingOut: round.sittingOut.map((id, i) => (i === slot.index ? playerId : id)),
+    }
+  }
+  return {
+    ...round,
+    matches: round.matches.map((match, i) => {
+      if (i !== slot.matchIndex) return match
+      if (slot.team === 'A') {
+        const teamA: [string, string] = [match.teamA[0], match.teamA[1]]
+        teamA[slot.index] = playerId
+        return { ...match, teamA }
+      }
+      const teamB: [string, string] = [match.teamB[0], match.teamB[1]]
+      teamB[slot.index] = playerId
+      return { ...match, teamB }
+    }),
+  }
+}
+
+function lockedCourtMessage(round: Round, slot: LineupSlot): string | null {
+  if (slot.kind !== 'court') return null
+  const match = round.matches[slot.matchIndex]
+  if (!match || !matchHasEnteredScore(match)) return null
+  return `Court ${match.court} already has a score. Use Edit score instead of swapping.`
+}
+
+/**
+ * Swap two players in the current round: court ↔ court (including partners
+ * on the same court) or court ↔ sitting. Scored matches stay locked.
+ * Sit-out counts and partner history follow the lineup that will actually play.
+ */
+export function swapPlayers(
+  session: Session,
+  playerAId: string,
+  playerBId: string,
+): RosterChangeResult {
+  if (session.status !== 'active') {
+    return { session, ok: false, reason: 'Can only swap during play' }
+  }
+  if (playerAId === playerBId) {
+    return { session, ok: true }
+  }
+
+  const idx = session.currentRoundIndex
+  const round = session.rounds[idx]
+  if (!round) return { session, ok: false, reason: 'No round loaded' }
+
+  const slotA = findLineupSlot(round, playerAId)
+  const slotB = findLineupSlot(round, playerBId)
+  if (!slotA || !slotB) {
+    return { session, ok: false, reason: "That player isn't in this round." }
+  }
+  if (slotA.kind === 'sit' && slotB.kind === 'sit') {
+    return { session, ok: false, reason: 'Both players are sitting. Tap someone on court.' }
+  }
+
+  const locked =
+    lockedCourtMessage(round, slotA) ?? lockedCourtMessage(round, slotB)
+  if (locked) {
+    return { session, ok: false, reason: locked }
+  }
+
+  const idA = playerAt(round, slotA)
+  const idB = playerAt(round, slotB)
+  let nextRound = writeSlot(round, slotA, idB)
+  nextRound = writeSlot(nextRound, slotB, idA)
+
+  const matchIndexes = new Set<number>()
+  if (slotA.kind === 'court') matchIndexes.add(slotA.matchIndex)
+  if (slotB.kind === 'court') matchIndexes.add(slotB.matchIndex)
+  const oldMatches = [...matchIndexes].map((i) => round.matches[i]!)
+  const newMatches = [...matchIndexes].map((i) => nextRound.matches[i]!)
+
+  let partnerCounts = unrecordPartnerships(session.partnerCounts, oldMatches)
+  partnerCounts = recordPartnerships(partnerCounts, newMatches)
+
+  const oldSit = new Set(round.sittingOut)
+  const newSit = new Set(nextRound.sittingOut)
+  const leftBench = [...oldSit].filter((id) => !newSit.has(id))
+  const joinedBench = [...newSit].filter((id) => !oldSit.has(id))
+  let sitOutCounts = unbumpSitOuts(session.sitOutCounts, leftBench)
+  sitOutCounts = bumpSitOuts(sitOutCounts, joinedBench)
+
+  const nameA = session.players.find((p) => p.id === playerAId)?.name ?? 'Player'
+  const nameB = session.players.find((p) => p.id === playerBId)?.name ?? 'Player'
+
+  return {
+    session: {
+      ...session,
+      partnerCounts,
+      sitOutCounts,
+      rounds: session.rounds.map((r, i) => (i === idx ? nextRound : r)),
+    },
+    ok: true,
+    reason: `Swapped ${nameA} and ${nameB}`,
   }
 }
 
