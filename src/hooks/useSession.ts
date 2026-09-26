@@ -8,6 +8,7 @@ import {
   rematchFromHistory,
   updateHistoryRecap,
 } from '../lib/history'
+import { hapticLight } from '../lib/haptics'
 import { generateSportsCenterRecap } from '../lib/recap'
 import { undoLastScore } from '../lib/scoring'
 import {
@@ -119,25 +120,30 @@ export function useSession() {
     },
     swapPlayersDuringPlay: (playerAId: string, playerBId: string): string | null => {
       let msg: string | null = null
+      let ok = false
       setSession((s) => {
         const result = swapPlayers(s, playerAId, playerBId)
         if (!result.ok) {
           msg = `ERR:${result.reason ?? 'Could not swap'}`
           return s
         }
+        ok = true
         msg = result.reason ?? 'Swapped'
         return result.session
       })
+      if (ok) hapticLight()
       return msg
     },
     toggleSitDuringPlay: (id: string): string | null => {
       let msg: string | null = null
+      let ok = false
       setSession((s) => {
         const result = toggleSit(s, id)
         if (!result.ok) {
           msg = `ERR:${result.reason ?? 'Could not sit'}`
           return s
         }
+        ok = true
         const name = s.players.find((p) => p.id === id)?.name ?? 'Player'
         if (result.regenerated) {
           const sitting = result.session.rounds[result.session.currentRoundIndex]?.sittingOut.includes(id)
@@ -147,6 +153,7 @@ export function useSession() {
         }
         return result.session
       })
+      if (ok) hapticLight()
       return msg
     },
     setCourts: (n: number) => update((s) => setCourts(s, n)),
@@ -155,8 +162,10 @@ export function useSession() {
     start: () => update((s) => startSession(s)),
     switchToKingsCourt: (seed: KingsCourtSeed = 'standings') =>
       update((s) => switchToKingsCourt(s, seed)),
-    submitScore: (roundIndex: number, matchId: string, a: number, b: number) =>
-      update((s) => saveMatchScore(s, roundIndex, matchId, a, b)),
+    submitScore: (roundIndex: number, matchId: string, a: number, b: number) => {
+      update((s) => saveMatchScore(s, roundIndex, matchId, a, b))
+      hapticLight()
+    },
     saveComment: (roundIndex: number, matchId: string, comment: string) =>
       update((s) => setMatchComment(s, roundIndex, matchId, comment)),
     saveRoundNote: (roundIndex: number, note: string) =>

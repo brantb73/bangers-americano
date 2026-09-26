@@ -1,7 +1,11 @@
 .app-shell {
   max-width: 480px;
   margin: 0 auto;
-  padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+  padding:
+    calc(16px + env(safe-area-inset-top, 0px))
+    calc(16px + env(safe-area-inset-right, 0px))
+    calc(24px + env(safe-area-inset-bottom, 0px))
+    calc(16px + env(safe-area-inset-left, 0px));
   min-height: 100dvh;
 }
 
@@ -1199,4 +1203,28 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.privacy-details {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.privacy-details summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.privacy-details p {
+  margin: 8px 0 0;
+}
+
+.privacy-link {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.privacy-url {
+  word-break: break-all;
 }

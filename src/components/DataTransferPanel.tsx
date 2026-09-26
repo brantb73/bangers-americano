@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
+import { shareJsonExport } from '../lib/nativeShare'
+import { isIosApp } from '../lib/platform'
 import {
   applyImport,
   buildExportPayload,
   copyText,
-  downloadJson,
   exportHistoryOnly,
   exportPayloadToJson,
   exportSessionOnly,
@@ -25,6 +26,7 @@ export function DataTransferPanel({ session, history, onImported }: Props) {
   const [restoreSession, setRestoreSession] = useState(true)
   const [confirmReplace, setConfirmReplace] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const ios = isIosApp()
 
   const hasSessionData =
     session.players.length > 0 ||
@@ -41,25 +43,45 @@ export function DataTransferPanel({ session, history, onImported }: Props) {
     flash(ok ? `${label} copied` : `Could not copy — use Download instead`)
   }
 
+  async function exportPayload(filename: string, json: string, downloaded: string, shared: string) {
+    const result = await shareJsonExport(filename, json)
+    if (result === 'shared') flash(shared)
+    else if (result === 'downloaded') flash(downloaded)
+    else if (result === 'cancelled') flash('Share cancelled')
+    else flash('Could not export — try Copy instead')
+  }
+
   function exportCurrent() {
     const payload = exportSessionOnly(session)
     const json = exportPayloadToJson(payload)
-    downloadJson(`americano-session-${payload.exportedAt.slice(0, 10)}.json`, json)
-    flash('Current session downloaded')
+    void exportPayload(
+      `americano-session-${payload.exportedAt.slice(0, 10)}.json`,
+      json,
+      'Current session downloaded',
+      'Current session ready to share',
+    )
   }
 
   function exportHistory() {
     const payload = exportHistoryOnly(history)
     const json = exportPayloadToJson(payload)
-    downloadJson(`americano-history-${payload.exportedAt.slice(0, 10)}.json`, json)
-    flash(`History downloaded (${history.length} entries)`)
+    void exportPayload(
+      `americano-history-${payload.exportedAt.slice(0, 10)}.json`,
+      json,
+      `History downloaded (${history.length} entries)`,
+      `History ready to share (${history.length} entries)`,
+    )
   }
 
   function exportAll() {
     const payload = buildExportPayload(session, history)
     const json = exportPayloadToJson(payload)
-    downloadJson(`americano-backup-${payload.exportedAt.slice(0, 10)}.json`, json)
-    flash('Full backup downloaded')
+    void exportPayload(
+      `americano-backup-${payload.exportedAt.slice(0, 10)}.json`,
+      json,
+      'Full backup downloaded',
+      'Full backup ready to share',
+    )
   }
 
   function runImport(raw: string) {
@@ -118,7 +140,9 @@ export function DataTransferPanel({ session, history, onImported }: Props) {
     <section className="card data-transfer">
       <h2>Export / Import</h2>
       <p className="hint device-hint" role="note">
-        Sessions are saved on this device/browser only — use Export/Import to move them.
+        {ios
+          ? 'Sessions in the iPhone app stay on this phone. They are separate from bangerstournify.com — Export/Import (the share sheet) moves them.'
+          : 'Sessions are saved on this device/browser only — use Export/Import to move them.'}
       </p>
 
       <h3 className="transfer-sub">Export</h3>
@@ -129,7 +153,7 @@ export function DataTransferPanel({ session, history, onImported }: Props) {
           onClick={exportCurrent}
           disabled={!hasSessionData}
         >
-          Download current session
+          {ios ? 'Share current session' : 'Download current session'}
         </button>
         <button
           type="button"
@@ -147,7 +171,7 @@ export function DataTransferPanel({ session, history, onImported }: Props) {
           onClick={exportHistory}
           disabled={history.length === 0}
         >
-          Download history ({history.length})
+          {ios ? 'Share history' : 'Download history'} ({history.length})
         </button>
         <button
           type="button"
@@ -160,7 +184,7 @@ export function DataTransferPanel({ session, history, onImported }: Props) {
           Copy history JSON
         </button>
         <button type="button" className="btn btn-primary btn-block" onClick={exportAll}>
-          Download full backup
+          {ios ? 'Share full backup' : 'Download full backup'}
         </button>
       </div>
 
