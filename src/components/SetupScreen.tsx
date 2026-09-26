@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { isIosApp } from '../lib/platform'
 import { sitOutHint } from '../lib/schedule'
 import { canStart } from '../lib/session'
 import type { Session, SessionHistoryEntry, WinBy } from '../lib/types'
@@ -47,6 +48,7 @@ export function SetupScreen({
   const [addError, setAddError] = useState<string | null>(null)
   const check = canStart(session)
   const byeHint = sitOutHint(session.players.length, session.courts)
+  const ios = isIosApp()
 
   function handleAdd(e: FormEvent) {
     e.preventDefault()
@@ -190,6 +192,27 @@ export function SetupScreen({
       >
         Start session
       </button>
+
+      <details className="privacy-details">
+        <summary>Privacy policy</summary>
+        <p>
+          Scores, player names, comments, and recap audio stay on this device. Tournify
+          does not collect, track, or send them. The iPhone app’s sessions are separate
+          from the website — Export/Import moves them.
+        </p>
+        <p>
+          {ios ? (
+            <>
+              Full policy (also used for the App Store):{' '}
+              <span className="privacy-url">https://bangerstournify.com/privacy.html</span>
+            </>
+          ) : (
+            <a className="privacy-link" href={`${import.meta.env.BASE_URL}privacy.html`}>
+              Read the full privacy policy
+            </a>
+          )}
+        </p>
+      </details>
     </div>
   )
 }

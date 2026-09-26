@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { generateSportsCenterRecap } from '../lib/recap'
-import { canNativeShare, downloadTextFile, shareText } from '../lib/share'
+import { recapSurface } from '../lib/platform'
+import {
+  generateRecapAudio,
+  releaseRecapAudio,
+  shareGeneratedRecap,
+  type GeneratedRecapAudio,
+} from '../lib/recapAudio'
+import { shareRecapText } from '../lib/nativeShare'
+import { canNativeShare, downloadTextFile } from '../lib/share'
 import {
   isPaused,
   isSpeaking,
@@ -10,13 +18,7 @@ import {
   speechSupported,
   stopRecap,
 } from '../lib/speech'
-import {
-  canShareFiles,
-  downloadBlob,
-  fetchTtsAudio,
-  shareAudioFile,
-  TtsError,
-} from '../lib/tts'
+import { canShareFiles, downloadBlob, TtsError } from '../lib/tts'
 import type { Session } from '../lib/types'
 
 interface Props {
@@ -33,16 +35,17 @@ export function RecapPanel({
   onScriptChange,
   title = 'Highlight reel / podcast recap (snarky)',
 }: Props) {
+  const surface = recapSurface()
+  const ios = surface === 'ios'
   const [localScript, setLocalScript] = useState(script ?? '')
   const [playing, setPlaying] = useState(false)
   const [paused, setPaused] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [audioBusy, setAudioBusy] = useState(false)
   const [audioError, setAudioError] = useState<string | null>(null)
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
-  const [audioTruncated, setAudioTruncated] = useState(false)
-  const [hasAudio, setHasAudio] = useState(false)
-  const audioBlobRef = useRef<Blob | null>(null)
+  const [audio, setAudio] = useState<GeneratedRecapAudio | null>(null)
+  const audioRef = useRef<GeneratedRecapAudio | null>(null)
+  const playerRef = useRef<HTMLAudioElement | null>(null)
   const supported = speechSupported()
   const nativeShare = canNativeShare()
   const fileShare = canShareFiles()
@@ -54,9 +57,8 @@ export function RecapPanel({
   useEffect(() => {
     return () => {
       stopRecap()
-      if (audioUrl) URL.revokeObjectURL(audioUrl)
+      releaseRecapAudio(audioRef.current)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function flash(msg: string) {
@@ -75,11 +77,17 @@ export function RecapPanel({
   }
 
   function clearAudio() {
-    if (audioUrl) URL.revokeObjectURL(audioUrl)
-    setAudioUrl(null)
-    audioBlobRef.current = null
-    setHasAudio(false)
-    setAudioTruncated(false)
+    playerRef.current?.pause()
+    releaseRecapAudio(audioRef.current)
+    audioRef.current = null
+    setAudio(null)
+  }
+
+  function rememberAudio(next: GeneratedRecapAudio) {
+    playerRef.current?.pause()
+    releaseRecapAudio(audioRef.current)
+    audioRef.current = next
+    setAudio(next)
   }
 
   function generate() {
@@ -139,7 +147,7 @@ export function RecapPanel({
 
   async function share() {
     const text = ensureScript()
-    const result = await shareText('Bangers Highlight Reel', text)
+    const result = await shareRecapText('Bangers Highlight Reel', text)
     if (result === 'shared') flash('Shared')
     else if (result === 'copied') flash('Copied — paste into Messages')
     else if (result === 'cancelled') flash('Share cancelled')
@@ -153,19 +161,21 @@ export function RecapPanel({
     flash('Downloaded .txt')
   }
 
-  async function generateAudio() {
+  async function createAudio(): Promise<GeneratedRecapAudio | null> {
     const text = ensureScript()
     setAudioBusy(true)
     setAudioError(null)
-    flash('Generating audio…')
+    flash(ios ? 'Creating audio on this iPhone…' : 'Generating audio…')
     try {
-      const { blob, truncated } = await fetchTtsAudio(text)
-      clearAudio()
-      audioBlobRef.current = blob
-      setHasAudio(true)
-      setAudioUrl(URL.createObjectURL(blob))
-      setAudioTruncated(truncated)
-      flash(truncated ? 'Audio ready (script truncated for length)' : 'Audio ready')
+      const next = await generateRecapAudio(text)
+      rememberAudio(next)
+      const voiceNote = next.voice ? ` · ${next.voice}` : ''
+      flash(
+        next.truncated
+          ? `Audio ready (script truncated for length)${voiceNote}`
+          : `Audio ready${voiceNote}`,
+      )
+      return next
     } catch (err) {
       const msg =
         err instanceof TtsError
@@ -175,58 +185,31 @@ export function RecapPanel({
             : 'TTS failed'
       setAudioError(msg)
       flash('Audio failed — see note below')
+      return null
     } finally {
       setAudioBusy(false)
     }
   }
 
   function downloadAudio() {
-    const blob = audioBlobRef.current
-    if (!blob) {
+    const blob = audioRef.current?.blob
+    if (!blob || !audioRef.current) {
       flash('Generate audio first')
       return
     }
-    const stamp = new Date().toISOString().slice(0, 10)
-    downloadBlob(blob, `bangers-highlight-reel-${stamp}.mp3`)
+    downloadBlob(blob, audioRef.current.filename)
     flash('Downloaded .mp3')
   }
 
   async function shareAudio() {
-    let blob = audioBlobRef.current
-    if (!blob) {
-      setAudioBusy(true)
-      setAudioError(null)
-      flash('Generating audio…')
-      try {
-        const result = await fetchTtsAudio(ensureScript())
-        clearAudio()
-        blob = result.blob
-        audioBlobRef.current = blob
-        setHasAudio(true)
-        setAudioUrl(URL.createObjectURL(blob))
-        setAudioTruncated(result.truncated)
-      } catch (err) {
-        const msg =
-          err instanceof TtsError
-            ? err.message
-            : err instanceof Error
-              ? err.message
-              : 'TTS failed'
-        setAudioError(msg)
-        flash('Audio failed — see note below')
-        setAudioBusy(false)
-        return
-      } finally {
-        setAudioBusy(false)
-      }
+    let current = audioRef.current
+    if (!current) {
+      current = await createAudio()
+      if (!current) return
     }
-
-    const stamp = new Date().toISOString().slice(0, 10)
-    const filename = `bangers-highlight-reel-${stamp}.mp3`
-    const result = await shareAudioFile(blob, filename)
+    const result = await shareGeneratedRecap(current)
     if (result === 'shared') flash('Shared audio')
-    else if (result === 'downloaded')
-      flash('Audio saved — attach it in Messages')
+    else if (result === 'downloaded') flash('Audio saved — attach it in Messages')
     else if (result === 'cancelled') flash('Share cancelled')
     else flash('Could not share audio')
   }
@@ -242,23 +225,34 @@ export function RecapPanel({
   }, [session.id, session.status])
 
   const canAct = Boolean(localScript.trim()) || session.status === 'finished'
+  const hasAudio = Boolean(audio)
 
   return (
     <section className="card recap-panel">
       <h2>{title}</h2>
-      <p className="hint">
-        Snarky Bangers highlight-reel podcast from scores, standings, and your courtside
-        comments. <strong>Generate audio</strong> makes a real .mp3 (needs the running app
-        server). <strong>Share audio</strong> sends the file when the OS allows; otherwise
-        it downloads so you can attach it. Web Speech ▶ Play stays as a quick preview.
-        {supported ? '' : ' (Browser speech preview not supported.)'}
-      </p>
+      {ios ? (
+        <p className="hint">
+          Snarky Bangers highlight-reel podcast from scores, standings, and your courtside
+          comments. <strong>Create audio recap</strong> uses the iPhone’s own voice — no
+          internet — and makes a file you can play here or send with the share sheet
+          (Messages, Mail, and so on). For a more natural voice, download an Enhanced or
+          Premium English (US) voice in Settings → Accessibility → Spoken Content → Voices.
+        </p>
+      ) : (
+        <p className="hint">
+          Snarky Bangers highlight-reel podcast from scores, standings, and your courtside
+          comments. <strong>Generate audio</strong> makes a real .mp3 (needs the running app
+          server). <strong>Share audio</strong> sends the file when the OS allows; otherwise
+          it downloads so you can attach it. Web Speech ▶ Play stays as a quick preview.
+          {supported ? '' : ' (Browser speech preview not supported.)'}
+        </p>
+      )}
 
       <div className="recap-toolbar">
         <button type="button" className="btn btn-primary" onClick={generate}>
           {localScript ? 'Regenerate reel' : 'Generate highlight reel'}
         </button>
-        {supported && (
+        {!ios && supported && (
           <>
             {!playing || paused ? (
               <button
@@ -287,10 +281,18 @@ export function RecapPanel({
         <button
           type="button"
           className="btn btn-secondary"
-          onClick={() => void generateAudio()}
+          onClick={() => void createAudio()}
           disabled={!canAct || audioBusy}
         >
-          {audioBusy ? 'Generating…' : hasAudio ? 'Regenerate audio' : 'Generate audio'}
+          {audioBusy
+            ? 'Generating…'
+            : hasAudio
+              ? ios
+                ? 'Recreate audio recap'
+                : 'Regenerate audio'
+              : ios
+                ? 'Create audio recap'
+                : 'Generate audio'}
         </button>
         <button
           type="button"
@@ -298,35 +300,39 @@ export function RecapPanel({
           onClick={() => void shareAudio()}
           disabled={!canAct || audioBusy}
         >
-          {fileShare ? 'Share audio' : 'Share audio (save)'}
+          {ios ? 'Share audio' : fileShare ? 'Share audio' : 'Share audio (save)'}
         </button>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={downloadAudio}
-          disabled={!hasAudio || audioBusy}
-        >
-          Download .mp3
-        </button>
+        {!ios && (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={downloadAudio}
+            disabled={!hasAudio || audioBusy}
+          >
+            Download .mp3
+          </button>
+        )}
         <button
           type="button"
           className="btn btn-secondary"
-          onClick={share}
+          onClick={() => void share()}
           disabled={!canAct}
         >
-          {nativeShare ? 'Share as text' : 'Share as text (copy)'}
+          {ios || nativeShare ? 'Share as text' : 'Share as text (copy)'}
         </button>
-        <button type="button" className="btn btn-ghost" onClick={copy} disabled={!canAct}>
+        <button type="button" className="btn btn-ghost" onClick={() => void copy()} disabled={!canAct}>
           Copy script
         </button>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={download}
-          disabled={!canAct}
-        >
-          Download .txt
-        </button>
+        {!ios && (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={download}
+            disabled={!canAct}
+          >
+            Download .txt
+          </button>
+        )}
       </div>
 
       {status && (
@@ -341,12 +347,19 @@ export function RecapPanel({
         </p>
       )}
 
-      {audioUrl && (
+      {audio && (
         <div className="recap-audio-player">
-          <audio controls src={audioUrl} preload="metadata" />
-          {audioTruncated && (
+          <audio
+            ref={playerRef}
+            controls
+            src={audio.playbackUrl}
+            preload="metadata"
+            playsInline
+          />
+          {audio.truncated && (
             <p className="hint">Script was truncated for TTS length (~4500 chars).</p>
           )}
+          {audio.voice && <p className="hint">Voice: {audio.voice}</p>}
         </div>
       )}
 

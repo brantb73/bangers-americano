@@ -1,12 +1,22 @@
+import { useEffect } from 'react'
 import { PlayScreen } from './components/PlayScreen'
 import { SetupScreen } from './components/SetupScreen'
 import { SummaryScreen } from './components/SummaryScreen'
 import { useSession } from './hooks/useSession'
+import { setKeepAwake } from './lib/nativeShell'
 import './App.css'
 
 export default function App() {
   const api = useSession()
   const { session, history, hydrated } = api
+
+  useEffect(() => {
+    if (!hydrated) return
+    void setKeepAwake(session.status === 'active')
+    return () => {
+      void setKeepAwake(false)
+    }
+  }, [hydrated, session.status])
 
   if (!hydrated) {
     return (
