@@ -29,6 +29,19 @@ npm run preview   # serve the production build locally (includes /api/tts)
 
 **Optional tunnel:** if phone and laptop are on different networks, use a tunnel such as [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/) or `npx localtunnel --port 5173` and open the public URL on the phone.
 
+## iPhone app
+
+The same UI ships as an iPhone app (Capacitor, bundled offline, on-device audio recaps). The website build and GitHub Pages deploy are unchanged (`base: '/'`). Sessions in the app are stored on the phone and are **separate** from bangerstournify.com — Export/Import moves them.
+
+Step-by-step Xcode, TestFlight, and App Store instructions for a Mac: **[IOS.md](./IOS.md)**.
+
+```bash
+npm run ios:sync   # production build + copy into the Xcode project
+npm run ios:open   # open Xcode (on a Mac)
+```
+
+Privacy policy (website and App Store): [https://bangerstournify.com/privacy.html](https://bangerstournify.com/privacy.html).
+
 ## Live app / GitHub Pages
 
 **https://bangerstournify.com**
@@ -100,7 +113,9 @@ Sit-outs / byes are distributed so players with the fewest sit-outs so far sit n
 
 ## Audio share (real .mp3)
 
-`speechSynthesis` cannot export an audio file. Bangers uses a same-origin **`POST /api/tts`** Vite middleware that runs **edge-tts** (Microsoft Edge neural voices) and returns `audio/mpeg`.
+The **iPhone app** does not use this server. It writes the recap on the device with Apple’s speech synthesizer and shares that file. See [IOS.md](./IOS.md).
+
+On the **website / dev server**, `speechSynthesis` cannot export an audio file. Bangers uses a same-origin **`POST /api/tts`** Vite middleware that runs **edge-tts** (Microsoft Edge neural voices) and returns `audio/mpeg`.
 
 **Voice:** `en-US-AndrewNeural` (warm conversational US English — podcast host vibe).
 

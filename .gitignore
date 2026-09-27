@@ -40,3 +40,10 @@ ehthumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Xcode / Capacitor local build output
+ios/App/build
+ios/DerivedData
+ios/App/Pods
+ios/**/xcuserdata
+*.xcuserstate

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#05070a" />
+    <title>Privacy policy — Tournify by BANGERS</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #05070a;
+        --text: #f4f8fc;
+        --muted: #9db4c8;
+        --accent: #7ec8e8;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        line-height: 1.5;
+      }
+      main {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+      }
+      a {
+        color: var(--accent);
+      }
+      h1 {
+        font-size: 1.8rem;
+        letter-spacing: -0.02em;
+        margin-bottom: 0.25rem;
+      }
+      .updated {
+        color: var(--muted);
+        margin-top: 0;
+      }
+      h2 {
+        font-size: 1.1rem;
+        margin-top: 1.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p><a href="/">← Tournify by BANGERS</a></p>
+      <h1>Privacy policy</h1>
+      <p class="updated">Last updated September 26, 2026</p>
+
+      <p>
+        Tournify by BANGERS is a pickleball Americano session tracker (with an optional
+        King’s Court finish). It is published by Barry
+        (<a href="https://github.com/brantb73/bangers-americano">brantb73/bangers-americano</a>).
+      </p>
+
+      <h2>Data stays on your device</h2>
+      <p>
+        Player names, scores, sit-outs, comments, session history, and recap scripts are
+        stored only on the device you are using. The website uses your browser’s
+        localStorage. The iPhone app uses the app’s own on-device storage. Nothing is
+        uploaded to Tournify, and there is no account.
+      </p>
+      <p>
+        Sessions in the iPhone app are <strong>separate</strong> from sessions on
+        <a href="https://bangerstournify.com">bangerstournify.com</a>. Use Export/Import
+        in the app to move a backup between the phone and the website.
+      </p>
+
+      <h2>What we do not do</h2>
+      <ul>
+        <li>We do not collect, sell, or share personal information.</li>
+        <li>We do not use analytics, advertising, or tracking.</li>
+        <li>We do not ask you to sign in.</li>
+      </ul>
+
+      <h2>Audio recaps</h2>
+      <p>
+        In the <strong>iPhone app</strong>, “Create audio recap” uses Apple’s speech
+        synthesizer on the device and writes an audio file there. That file stays on the
+        phone until you choose to share it (for example with Messages). The app does not
+        send the script or the audio to a server. The development speech path described
+        below is not used in the App Store app.
+      </p>
+      <p>
+        On the <strong>website</strong>, “Play preview” uses your browser’s Web Speech
+        API and does not create a file. “Generate audio” only works when you run the
+        project yourself (<code>npm run dev</code> or <code>npm run preview</code>) and
+        then talks to that computer’s <code>/api/tts</code> helper. The public site at
+        bangerstournify.com is static and does not include that helper, so the public
+        site does not send your script anywhere.
+      </p>
+
+      <h2>Sharing</h2>
+      <p>
+        Share, copy, and export do something only when you tap them. They hand text or a
+        file to your device’s share sheet, clipboard, or downloads. Where that file goes
+        next is up to you and the app you pick (Messages, Mail, Files, and so on).
+      </p>
+
+      <h2>Children</h2>
+      <p>
+        Tournify is a general-audience sports scoreboard. It is not directed at children
+        under 13, and it does not knowingly collect personal information from anyone.
+      </p>
+
+      <h2>Changes</h2>
+      <p>
+        If this policy changes, the updated page will be posted at
+        <a href="https://bangerstournify.com/privacy.html">https://bangerstournify.com/privacy.html</a>
+        with a new date.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Questions: open an issue on
+        <a href="https://github.com/brantb73/bangers-americano">GitHub</a>.
+      </p>
+    </main>
+  </body>
+</html>

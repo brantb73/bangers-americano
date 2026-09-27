@@ -1,0 +1,11 @@
+{
+  "name": "@tournify/speech-file",
+  "version": "0.1.0",
+  "private": true,
+  "description": "On-device AVSpeechSynthesizer recap audio for the Tournify iPhone app.",
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  }
+}
