@@ -10,7 +10,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
  * copies into the Xcode project, so it works with no network.
  */
 const config: CapacitorConfig = {
-  appId: 'com.brantb73.tournify',
+  appId: 'com.barrybrant.tournify',
   appName: 'Tournify',
   webDir: 'dist',
   backgroundColor: '#05070a',
