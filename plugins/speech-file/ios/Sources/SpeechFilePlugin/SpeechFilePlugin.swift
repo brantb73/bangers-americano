@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import Capacitor
 import Foundation
 
@@ -49,7 +49,7 @@ public class SpeechFilePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 }
 
-private struct SpeechFileOutput {
+private struct SpeechFileOutput: Sendable {
     let url: URL
     let voiceName: String
     let quality: String
@@ -158,9 +158,11 @@ private enum SpeechChunker {
     }
 }
 
-private final class RecapSpeechWriter: NSObject, AVSpeechSynthesizerDelegate {
-    private let synthesizer = AVSpeechSynthesizer()
-    private let writeQueue = DispatchQueue(label: "com.brantb73.tournify.speech.write")
+/// `AVSpeechSynthesizerDelegate` is a Sendable protocol. File writes stay on `writeQueue`.
+private final class RecapSpeechWriter: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
+    // The synthesizer is not Sendable. Speech control stays on the main queue.
+    private nonisolated(unsafe) let synthesizer = AVSpeechSynthesizer()
+    private let writeQueue = DispatchQueue(label: "com.barrybrant.tournify.speech.write")
     private var wavFile: AVAudioFile?
     private var wavURL: URL?
     private var m4aURL: URL?
@@ -171,11 +173,11 @@ private final class RecapSpeechWriter: NSObject, AVSpeechSynthesizerDelegate {
     private var finishedThrough = -1
     private var framesInChunk: AVAudioFrameCount = 0
     private var chunkByUtterance: [ObjectIdentifier: Int] = [:]
-    private var completion: ((Result<SpeechFileOutput, Error>) -> Void)?
+    private nonisolated(unsafe) var completion: ((Result<SpeechFileOutput, Error>) -> Void)?
     private var didComplete = false
     private var cancelled = false
     private var failed = false
-    private var timeoutItem: DispatchWorkItem?
+    private nonisolated(unsafe) var timeoutItem: DispatchWorkItem?
 
     func start(text: String, completion: @escaping (Result<SpeechFileOutput, Error>) -> Void) {
         self.completion = completion
@@ -228,18 +230,23 @@ private final class RecapSpeechWriter: NSObject, AVSpeechSynthesizerDelegate {
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.96
         utterance.pitchMultiplier = 1.0
         utterance.preUtteranceDelay = index == 0 ? 0.05 : 0.15
+        let chunkKey = ObjectIdentifier(utterance)
         writeQueue.sync {
             self.framesInChunk = 0
-            self.chunkByUtterance[ObjectIdentifier(utterance)] = index
+            self.chunkByUtterance[chunkKey] = index
         }
-        synthesizer.write(utterance) { [weak self] buffer in
+        // `BufferCallback` is `(AVAudioBuffer) -> Void`. The buffer is not Sendable, and
+        // the synthesizer may reuse it once this callback returns, so the write is synchronous.
+        let onBuffer: AVSpeechSynthesizer.BufferCallback = { [weak self] buffer in
             guard let self else { return }
+            nonisolated(unsafe) let capturedBuffer = buffer
             self.writeQueue.sync {
-                if self.append(buffer) {
+                if self.append(capturedBuffer) {
                     self.markChunkFinished(index)
                 }
             }
         }
+        synthesizer.write(utterance, toBufferCallback: onBuffer)
     }
 
     /// Called on `writeQueue`. Returns true when this buffer ends the chunk.
@@ -254,7 +261,7 @@ private final class RecapSpeechWriter: NSObject, AVSpeechSynthesizerDelegate {
         do {
             if wavFile == nil {
                 let format = pcm.format
-                if format.commonFormat == .other {
+                if format.commonFormat == AVAudioCommonFormat.otherFormat {
                     wavFile = try AVAudioFile(forWriting: wavURL, settings: format.settings)
                 } else {
                     wavFile = try AVAudioFile(
@@ -366,8 +373,11 @@ private final class RecapSpeechWriter: NSObject, AVSpeechSynthesizerDelegate {
             try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
             let callback = self.completion
             self.completion = nil
+            // The plugin completion captures the Capacitor call, which is not Sendable.
+            nonisolated(unsafe) let pendingCallback = callback
+            nonisolated(unsafe) let pendingResult = result
             DispatchQueue.main.async {
-                callback?(result)
+                pendingCallback?(pendingResult)
             }
         }
     }
@@ -392,17 +402,19 @@ private enum SpeechAudioConverter {
         }
         exporter.outputURL = m4aURL
         exporter.outputFileType = .m4a
-        exporter.exportAsynchronously {
-            switch exporter.status {
+        nonisolated(unsafe) let session = exporter
+        nonisolated(unsafe) let finishExport = completion
+        session.exportAsynchronously {
+            switch session.status {
             case .completed:
-                completion(.success(m4aURL))
+                finishExport(.success(m4aURL))
             case .failed:
-                let message = exporter.error?.localizedDescription ?? "Could not convert the recap to an audio file"
-                completion(.failure(speechError(message, code: 5)))
+                let message = session.error?.localizedDescription ?? "Could not convert the recap to an audio file"
+                finishExport(.failure(speechError(message, code: 5)))
             case .cancelled:
-                completion(.failure(speechError("Audio export was cancelled", code: 6)))
+                finishExport(.failure(speechError("Audio export was cancelled", code: 6)))
             default:
-                completion(.failure(speechError("Audio export did not finish", code: 7)))
+                finishExport(.failure(speechError("Audio export did not finish", code: 7)))
             }
         }
     }

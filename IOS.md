@@ -4,7 +4,7 @@ This is the Mac setup for the Tournify iPhone app. The website at [https://bange
 
 You will use your iMac or Mac mini for the Xcode steps. A Windows PC cannot build this.
 
-The bundle id is `com.brantb73.tournify`. To use a different one, change `appId` in `capacitor.config.ts` (that is the only place), then run `npm run ios:sync` again before you open Xcode.
+The bundle id is `com.barrybrant.tournify`. To use a different one, change `appId` in `capacitor.config.ts` (that is the only place), then run `npm run ios:sync` again before you open Xcode.
 
 ## What this app adds on iPhone
 
@@ -64,7 +64,7 @@ The first open will download Apple’s Swift packages (Capacitor and the speech 
 3. Open **Signing & Capabilities**.
 4. Check **Automatically manage signing**.
 5. **Team**: choose your name (Personal Team is enough to run on your own phone; the paid Developer team is required to upload).
-6. **Bundle Identifier** should read `com.brantb73.tournify`. If you change it, change `appId` in `capacitor.config.ts` and run `npm run ios:sync` so Xcode does not get overwritten the next time you sync.
+6. **Bundle Identifier** should read `com.barrybrant.tournify`. If you change it, change `appId` in `capacitor.config.ts` and run `npm run ios:sync` so Xcode does not get overwritten the next time you sync.
 
 ## 5. Run it on your iPhone
 
@@ -100,7 +100,7 @@ The project already answers the encryption question (`ITSAppUsesNonExemptEncrypt
    - Platform: iOS
    - Name: **Tournify**
    - Primary language: English (U.S.)
-   - Bundle ID: `com.brantb73.tournify` (register it if it is not in the list: **Certificates, Identifiers & Profiles → Identifiers → + → App IDs**, explicit, that bundle id)
+   - Bundle ID: `com.barrybrant.tournify` (register it if it is not in the list: **Certificates, Identifiers & Profiles → Identifiers → + → App IDs**, explicit, that bundle id)
    - SKU: `tournify` (any private id you will not change)
    - User access: full
 3. When the uploaded build appears under **TestFlight**, open it.
